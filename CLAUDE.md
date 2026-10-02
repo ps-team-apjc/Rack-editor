@@ -31,7 +31,31 @@ When you change features, edit `index.html` first and port the change to `artifa
 
 ## Architecture (all inside one IIFE in the `<script>`)
 
-- **State**: a single object `S`. It is saved to `localStorage` with a debounce of about 300 ms by `save()`, and every read and write is wrapped in try/catch. On load, `S` comes from storage or from `sample()`.
+- **State**: a single object `S`. It is saved to `localStorage` with a debounce of about 300 ms by `save()`, and every read and write is wrapped in try/catch. On load, `S` comes from storage (through `migrate()`) or from `sample()`.
+  - If `setItem` throws a quota error, `save()` also shows a persistent `#saveBanner` (role=alert) with a Download JSON button. The banner goes away after the next successful save. Other storage errors only change the status text.
+- **Schema version**: `S.v` (currently `SCHEMA = 2`; files without `v` are v1). `migrate(obj)` turns any older or partial object into a valid current state, filling defaults with `normSite()`. It returns `null` when there is no `sites` array. It runs on localStorage load, on JSON import and on undo/redo restore.
+  - To add Phase-1 fields (`rack.pdu`, `rack.cableSchedule`, `site.photos`, `site.issues`, `site.signoff`), bump `SCHEMA` and add a step `if(v<3){...defaults...;v=3}` in `migrate()` (there is a commented example). Also add the defaults to `normSite()`/factories.
+- **Images (IndexedDB)**: uploaded images are stored in IndexedDB (database `KEY+'-img'`, store `img`, records `{u: dataURL, t: time}`, keyed by a content hash). `S` keeps only `"idb:<id>"` refs. `IMG` is the in-memory cache (id → data URL), so rendering stays synchronous.
+  - **Always read images through `imgURL(ref)`, `diagImg(s)` and `logoSrc()`.** Never put `s.diagram.img` straight into HTML.
+  - At startup the cache is loaded before the first render. Any inline `data:image` strings (old v1 drafts) are moved to IDB (`internImages`). After 3 s, `gcImages()` deletes records that S, the saved draft and the undo/redo stacks don't reference, but only when they are older than one day (so other open tabs stay safe).
+  - JSON export (`exportJSON()` → `inlineImages`) is self-contained, with inline data URLs. JSON import runs `migrate()` and then `internImages()`.
+  - If IndexedDB is unavailable (blocked or sandboxed), `putImg()` returns the data URL itself and S keeps it inline, which is the old behaviour.
+  - All IDB access goes through `idbOpen()` / `idb(mode, fn)`, which never throw and resolve `null` on failure.
+- **Undo / redo**: `UNDO`/`REDO` are stacks of `JSON.stringify(S)` snapshots, capped at 50 and kept in memory only.
+  - Wrap every mutation in `mutate(fn)`. It snapshots S first and records the step only if S changed. `act()`, floor toggles, floor item type changes, uploads, JSON import, Reset and tab deletes all go through it.
+  - Typing is coalesced: the `input` handler calls `beginEdit()`, and the burst is committed after about 1 s idle or on `focusout` (`commitEdit()`).
+  - `undo()` / `redo()` restore a snapshot, then `save()` + `renderAll()`. Shortcuts: Ctrl/Cmd+Z, Ctrl+Y, Ctrl+Shift+Z. They are ignored while focus is in a text input or textarea (those keep native undo) and while a modal is open.
+  - `histUI()` enables/disables `#bUndo` / `#bRedo` if those buttons exist.
+  - `toastUndo(msg)` shows a toast with an Undo button for 6 s inside the `#toastUndo` host (`aria-live=polite`). Call it after a destructive `act()`.
+- **Section registry**: `SECTIONS = [{id, title, short?, hint, page, pages?, editor(s,P,si), doc(s,si,x), md(s,x), docx(s,x,c)}]` holds the numbered per-site sections, currently `info`, `place`, `racks` and `diagram`. Each section's number is its position + 1.
+  - `renderEditor()`, `siteHTML()`, `toMarkdown()` and `buildDocx()` all loop over the registry. To add a section, add one entry.
+  - Arguments: `x = {n, t, id}` from `secX()` (DOCX also gets `x.pb`), and `c` holds the DOCX helpers (`run, para, tbl, kvr, span, pic, addMedia`).
+  - `page:false` sections flow onto the site's first page (after the `<h2>` site name). `page:true` sections return their own `.page` divs, and `pages(s)` gives their page count.
+  - `pagePlan()` computes the TOC page numbers for both the preview and the DOCX.
+- **Element ids** (for nav and scroll-sync):
+  - Editor: `ed-doc` (cover card), `ed-<si>-site`, `ed-<si>-<sectionId>` (cards), `ed-<si>-racks-rack-<j>` (rack blocks).
+  - Preview: `pv-cover`, `pv-toc`, `pv-<si>` (the site's first page), `pv-<si>-<sectionId>` (each section's `<h5>`; it does not exist for `racks` when a site has no racks), `pv-<si>-racks-rack-<j>` (rack pages).
+  - `<si>` is the site index.
 - **Rendering**: string templates and `innerHTML`.
   - `renderTabs()` draws the site tabs.
   - `renderEditor()` draws the left-hand form.
@@ -40,7 +64,7 @@ When you change features, edit `index.html` first and port the change to `artifa
 - **Binding**: inputs carry `data-b="<path>"`, e.g. `sites.0.racks.1.devices.0.u`.
   - The delegated `input` handler on `#editor` calls `setP(S, path, value)`, then `save()`, then re-renders **only the preview**. This keeps focus in the form.
   - On `change`, selects and number inputs trigger a full `renderEditor()`, so derived chips and warnings update.
-- **Actions**: buttons carry `data-act="<name>"` plus `data-i` / `data-j` indexes. Everything goes through one `switch` in `act(a,i,j)`, which ends with `save(); renderAll()`.
+- **Actions**: buttons carry `data-act="<name>"` plus `data-i` / `data-j` indexes. `act(a,i,j)` runs the `switch` in `doAct()` inside `mutate()` (one undo step), then `save(); renderAll()`. `doAct` returns `false` when it did nothing.
 - **Two-click deletes**:
   - Buttons with `data-confirm` arm first ("Click again to delete") and reset after 3 s. Tab deletes (`data-tabx`) work the same way.
   - Never use `confirm()`, `alert()` or `prompt()`, because the artifact host blocks them.
@@ -54,20 +78,25 @@ When you change features, edit `index.html` first and port the change to `artifa
 | `unitsOf(r)`, `uLabel(r)`, `rackWarnings(r)` | Derived "จำนวน Unit", "หมายเลข Unit" (e.g. `U 21`, `U 21–22`), overlap/out-of-range warnings |
 | `rackSVG(r)` | Rack elevation SVG: 8 px per U, numbered from the bottom, devices drawn as `#0E7C86` bars with white labels |
 | `floorSVG(f, interactive)` | Room plan SVG. `f.orient` `'h'` = rows run left→right and stack top→bottom; `'v'` = columns run top→bottom and sit side by side. Aisle labels (rotated in `'v'`), door trapezoid at the bottom (`left/center/right/none`) |
-| `siteHTML(s)`, `docHTML()` | Paper preview: cover, TOC (page numbers computed: cover 1, TOC 2, per site → 1 page for sections 1+2, 1 page per rack, 1 page for the diagram), then pages |
+| `migrate(o)`, `normSite(s)` | Schema upgrade and defensive defaults (see Architecture) |
+| `SECTIONS`, `secX()`, `pagePlan()` | Section registry and the shared TOC page plan |
+| `siteHTML(s, si)`, `docHTML()` | Paper preview: cover, TOC (page numbers from `pagePlan()`: cover 1, TOC 2, per site → 1 page for sections 1+2, 1 page per rack, 1 page for the diagram), then pages |
+| `mutate(fn)`, `undo()`, `redo()`, `toastUndo(msg)` | Undo history (see Architecture) |
+| `putImg(dataUrl)`, `imgURL(ref)`, `diagImg(s)`, `internImages(o)`, `loadImages(o)`, `inlineImages(o)`, `gcImages()`, `exportJSON()` | IndexedDB image store |
 | `toMarkdown()` | Markdown export (tables, floor plan as text rows with `[x]` = install rack) |
 | `copyWord()` | Rasterises the preview SVGs to PNG and writes `text/html` to the clipboard (falls back to `execCommand('copy')`) |
 | `buildDocx()` | **Real .docx generator, hand-written OOXML + a stored (uncompressed) ZIP writer** (`crc32`, `zipFiles`). A4, 2 cm margins, logo in `header1.xml`, styles Heading1/Heading2 (Navigation pane works), 2-column bordered tables (3500 / 6138 twips), SVGs → PNG via `svgStrToPng`, uploaded images embedded as-is |
 | `saveFile(name, data, mime)` | Uses the `claude.use('downloads')` capability when hosted, otherwise a blob `<a download>` |
-| `shrink(file, max)` | Downscales uploaded images (logo 400 px, diagram 1600 px) before storing them as data URLs |
-| `logoSrc()` | `S.doc.logo === null` → built-in `APJC_LOGO` (base64 PNG taken from the source PDF); `''` → text logo (`S.doc.logoText`); string → custom data URL |
+| `shrink(file, max)` | Downscales uploaded images (logo 400 px, diagram 1600 px) to a data URL, which `putImg()` then stores in IDB |
+| `logoSrc()` | `S.doc.logo === null` → built-in `APJC_LOGO` (base64 PNG taken from the source PDF); `''` → text logo (`S.doc.logoText`); `"idb:…"` / data URL → custom logo (resolved via `imgURL`) |
 
 ## Data model
 
 ```jsonc
 {
+  "v": 2,                                                // schema version (missing = v1); see migrate()
   "doc": { "title": "Site Survey", "company": "National Telecom Public Company Limited",
-           "logoText": "APJC", "logo": null },          // null = APJC logo, "" = text, "data:..." = custom
+           "logoText": "APJC", "logo": null },          // null = APJC logo, "" = text, "idb:<id>" (or inline "data:...") = custom
   "cur": 0,                                              // selected site tab
   "sites": [{
     "id": "abc1234", "name": "NT Data Center Sriracha",  // section heading
@@ -82,10 +111,13 @@ When you change features, edit `index.html` first and port the change to `artifa
       "power":   [ "มีเพียงพอต่อการใช้งาน C12-C13", "..." ],                          // count = จำนวนแหล่งจ่าย
       "cables":  [ { "id": "", "type": "สาย Fiber OM3/4 Patch Cord", "text": "one run per line\n..." } ]
     }],
-    "diagram": { "img": null | "data:image/...", "caption": "" }
+    "diagram": { "img": null | "idb:<id>" | "data:image/...", "caption": "" }
   }]
 }
 ```
+
+In localStorage and in undo snapshots, images are `"idb:<id>"` refs. Exported JSON always has inline
+`data:image/...` URLs. Importing a file converts them back to refs.
 
 An empty rack name (`"n": ""`) is a blank floor position. In the editor, users type rack rows as
 comma lists, and an empty slot between commas makes a blank position (`, , 10, 09`).
@@ -114,7 +146,8 @@ has light and dark tokens on `:root`.
   - No `window.print`, no `<a download>`, no `alert/confirm/prompt`.
   - Use `saveFile()` for downloads, and wrap all storage in try/catch.
 - Thai text: keep the `cs` font and `szCs` size in DOCX runs (`w:cs`, `w:szCs`), or Thai will render in the wrong font or size.
-- Images are stored as data URLs in `S`, and localStorage holds about 5 MB. `save()` shows "Not saved here — use Save / load JSON" when the quota is exceeded.
+- Images live in IndexedDB, and `S` holds `idb:` refs. Only the IDB fallback keeps data URLs inline, and localStorage holds about 5 MB. On quota errors, `save()` shows "Not saved here — use Save / load JSON" plus the persistent `#saveBanner`.
+- Preview, Markdown and DOCX output must stay the same when internals are refactored. Compare before/after (preview `innerHTML` with `id` attributes stripped, Markdown text, and every DOCX part except `docProps/core.xml`).
 
 ## How to test
 
@@ -134,7 +167,6 @@ soffice --headless --convert-to pdf out.docx   # visual check; sample data → 1
 
 - The TOC page numbers are computed, not a Word TOC field. They drift when a rack table overflows a page. Option: emit a real `TOC \o "1-2"` field and let Word update it.
 - The connection diagram is image upload only. A built-in diagram editor (switches ↔ devices, link labels like "10G-SR") would be a natural next feature.
-- There is no undo. Possible approach: keep a history stack of `JSON.stringify(S)` snapshots in `act()`.
 - Ideas:
   - device library / presets (NetScaler MPX9200 1U, H3C server 1U/2U, etc.)
   - power-cord presets (C13-C14, C19-C20, 5-15P to C13)

@@ -98,6 +98,10 @@ label.f textarea{resize:vertical;min-height:56px}
 .modal-card .mb{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:10px}
 .modal-card textarea{width:100%;min-height:320px;font:12px/1.5 var(--mono);background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:60}
+.toast-undo{display:flex;gap:12px;align-items:center}
+.toast-undo .btn{background:transparent;color:inherit;border-color:currentColor}
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:10px 16px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--danger);border-left-width:5px;border-radius:8px;color:var(--fg);font-size:13px}
+.banner b{color:var(--danger)}
 
 /* ---------- paper document (always print-white, like the Word file) ---------- */
 .doc{display:flex;flex-direction:column;gap:16px;align-items:center}
@@ -208,7 +212,7 @@ function sample(){
       {id:uid(),device:'H3C Server',rack:'Rack N-A08',size:42,devices:[{id:uid(),name:'H3C Server',u:40,h:1}],power:pw('มีเพียงพอต่อการใช้งาน 5-15P to C13'),
        cables:[{id:uid(),type:'สาย LAN RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 3 เส้น'}]}],
     diagram:{img:null,caption:'All Connectivity = 10G-SR'}};
-  return {doc:{title:'Site Survey',company:'National Telecom Public Company Limited',logoText:'APJC',logo:null},sites:[sri,bkk],cur:0};
+  return {v:SCHEMA,doc:{title:'Site Survey',company:'National Telecom Public Company Limited',logoText:'APJC',logo:null},sites:[sri,bkk],cur:0};
 }
 function blankSite(n){
   return {id:uid(),name:'New site '+n,info:{agency:'',location:'',datetime:'',surveyors:''},
@@ -221,18 +225,114 @@ function blankRack(){return {id:uid(),device:'',rack:'Rack ',size:42,devices:[{i
 function cloneSite(s){const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+' (copy)';
   c.floor.items.forEach(i=>i.id=uid());c.racks.forEach(r=>{r.id=uid();r.devices.forEach(d=>d.id=uid());r.cables.forEach(x=>x.id=uid())});return c}
 
+/* ---------- schema version + migration ----------
+   v1 = original shape (no "v"). v2 = same shape + "v" stamp, all fields normalised.
+   To add fields later: bump SCHEMA and add a step `if(v<3){...defaults...;v=3}` in migrate(). */
+const SCHEMA=2;
+const isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+const str=(x,d='')=>typeof x==='string'?x:typeof x==='number'?String(x):d;
+const arr=x=>Array.isArray(x)?x:[];
+function migrate(o){
+  if(!isO(o)||!Array.isArray(o.sites))return null;
+  let v=+o.v||1;
+  if(v<2){v=2} // v1 → v2: no shape change; normalisation below fills any missing fields
+  // Phase-1 example: if(v<3){o.sites.forEach(s=>{if(isO(s)){s.photos=arr(s.photos);s.issues=arr(s.issues);s.signoff=isO(s.signoff)?s.signoff:{}}});v=3}
+  const d=isO(o.doc)?o.doc:{};
+  o.doc={...d,title:str(d.title,'Site Survey'),company:str(d.company),logoText:str(d.logoText,'APJC'),logo:d.logo==null?null:str(d.logo)};
+  o.sites=o.sites.filter(isO).map(normSite);
+  o.cur=Number.isInteger(+o.cur)&&+o.cur>=0&&+o.cur<o.sites.length?+o.cur:0;
+  o.v=SCHEMA;
+  return o;
+}
+function normSite(s){
+  const fill=(x,ks)=>{x=isO(x)?x:{};ks.forEach(k=>x[k]=str(x[k]));return x};
+  s.id=str(s.id)||uid();s.name=str(s.name);
+  s.info=fill(s.info,['agency','location','datetime','surveyors']);
+  s.place=fill(s.place,['equipment','building','address','racks']);
+  const f=s.floor=isO(s.floor)?s.floor:{};
+  f.orient=f.orient==='v'?'v':'h';f.door=['left','center','right','none'].includes(f.door)?f.door:'center';
+  f.items=arr(f.items).filter(isO).map(it=>it.type==='row'
+    ?{...it,id:str(it.id)||uid(),type:'row',racks:arr(it.racks).map(r=>isO(r)?{...r,n:str(r.n),on:!!r.on}:{n:str(r),on:false})}
+    :{...it,id:str(it.id)||uid(),type:'label',text:str(it.text)});
+  s.racks=arr(s.racks).filter(isO).map(r=>{r.id=str(r.id)||uid();r.device=str(r.device);r.rack=str(r.rack);if(!(+r.size>0))r.size=42;
+    r.devices=arr(r.devices).filter(isO).map(d=>({...d,id:str(d.id)||uid(),name:str(d.name),u:d.u??'',h:d.h??1}));
+    r.power=arr(r.power).map(p=>str(p));
+    r.cables=arr(r.cables).filter(isO).map(c=>({...c,id:str(c.id)||uid(),type:str(c.type),text:str(c.text)}));return r});
+  const g=isO(s.diagram)?s.diagram:{};
+  s.diagram={...g,img:typeof g.img==='string'&&g.img?g.img:null,caption:str(g.caption)};
+  return s;
+}
+
+/* ---------- image store: data URLs live in IndexedDB, S keeps "idb:<id>" refs ----------
+   IMG is the in-memory cache (id → data URL) so rendering stays synchronous.
+   If IndexedDB is unavailable, putImg() returns the data URL itself and S stays inline (old behaviour). */
+const IDB_RE=/^idb:[a-z0-9]+$/,DATA_RE=/^data:image\/[\w.+-]+;base64,/,IMG={},GC_AGE=864e5;
+let idbP;
+function idbOpen(){  // resolves the db, or null if unavailable; a slow open only times out this call, later calls still get the db
+  idbP=idbP||new Promise(res=>{try{const r=indexedDB.open(KEY+'-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');
+    r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)}catch(e){res(null)}});
+  return Promise.race([idbP,new Promise(r=>setTimeout(()=>r(null),5000))])}
+function idb(mode,fn){return idbOpen().then(db=>db&&new Promise(res=>{
+  try{const tx=db.transaction('img',mode),q=fn(tx.objectStore('img'));tx.oncomplete=()=>res(q?q.result:true);tx.onerror=tx.onabort=()=>res(null)}catch(e){res(null)}}))}
+function imgURL(ref){return typeof ref==='string'&&IDB_RE.test(ref)?(IMG[ref.slice(4)]||''):(ref||'')}
+const diagImg=s=>imgURL(s.diagram.img);
+function hashStr(u){let a=0x811c9dc5,b=0x01000193^u.length;for(let i=0;i<u.length;i++){const c=u.charCodeAt(i);a=Math.imul(a^c,16777619);b=Math.imul(b+c,2246822519)^(b>>>13)}
+  return (a>>>0).toString(36)+(b>>>0).toString(36)}
+async function putImg(u){
+  if(!DATA_RE.test(u))return u;
+  let id=hashStr(u);const old=await idb('readonly',st=>st.get(id));
+  if(old===null)return u;                         // no IndexedDB → keep inline
+  if(old&&old.u!==u)id+=uid();                     // hash collision → distinct id
+  if(!await idb('readwrite',st=>st.put({u,t:Date.now()},id)))return u;
+  IMG[id]=u;return 'idb:'+id;
+}
+function walkStr(o,fn){for(const k in o){const v=o[k];if(typeof v==='string'){const r=fn(v);if(r!==undefined)o[k]=r}else if(v&&typeof v==='object')walkStr(v,fn)}}
+const refIds=t=>[...String(t).matchAll(/"idb:([a-z0-9]+)"/g)].map(m=>m[1]);
+async function internImages(o){const todo=[];walkStr(o,v=>{if(DATA_RE.test(v))todo.push(v)});   // inline data URLs → IDB refs
+  const map={};for(const u of todo)if(!(u in map))map[u]=await putImg(u);walkStr(o,v=>v in map?map[v]:undefined);return o}
+async function loadImages(o){const ids=refIds(JSON.stringify(o)).filter(id=>!(id in IMG));
+  for(const id of ids){const r=await idb('readonly',st=>st.get(id));if(r&&r.u)IMG[id]=r.u}return ids.length}
+function inlineImages(o){const c=JSON.parse(JSON.stringify(o));walkStr(c,v=>IDB_RE.test(v)?(IMG[v.slice(4)]||''):undefined);return c}
+async function gcImages(){  // drop records no longer referenced by S, saved storage or undo/redo history (and older than a day, so other tabs are safe)
+  let raw='';try{raw=localStorage.getItem(KEY)||''}catch(e){}
+  const keep=new Set(refIds(JSON.stringify(S)+raw+UNDO.join('')+REDO.join('')));
+  const keys=await idb('readonly',st=>st.getAllKeys());if(!keys)return;
+  for(const k of keys){if(keep.has(k))continue;const r=await idb('readonly',st=>st.get(k));if(!r||Date.now()-(r.t||0)>GC_AGE){await idb('readwrite',st=>st.delete(k));delete IMG[k]}}
+}
+const exportJSON=()=>JSON.stringify(inlineImages(S),null,1);
+
 let S;
-try{const raw=localStorage.getItem(KEY);S=raw?JSON.parse(raw):null}catch(e){S=null}
-if(!S||!Array.isArray(S.sites)||!S.sites.length)S=sample();
-if(S.cur==null||S.cur>=S.sites.length)S.cur=0;
+try{const raw=localStorage.getItem(KEY);S=raw?migrate(JSON.parse(raw)):null}catch(e){S=null}
+if(!S||!S.sites.length)S=sample();
 
 let saveT;
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
   const el=document.getElementById('saved');
-  try{localStorage.setItem(KEY,JSON.stringify(S));el.textContent='Draft saved in this browser';el.className='saved'}
-  catch(e){el.textContent='Not saved here — use Save / load JSON';el.className='saved warn'}
+  try{localStorage.setItem(KEY,JSON.stringify(S));el.textContent='Draft saved in this browser';el.className='saved';saveBanner(false)}
+  catch(e){el.textContent='Not saved here — use Save / load JSON';el.className='saved warn';
+    if(e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22||e.code===1014))saveBanner(true)}
 },300)}
+function saveBanner(on){let b=document.getElementById('saveBanner');
+  if(!on){if(b)b.remove();return}if(b)return;
+  b=document.createElement('div');b.id='saveBanner';b.className='banner';b.setAttribute('role','alert');
+  b.innerHTML=`<span><b>Changes are not being saved.</b> This draft is too large for this browser's storage. Download a JSON copy to keep your work.</span><button class="btn sm primary" type="button">Download JSON</button>`;
+  b.querySelector('button').onclick=()=>document.getElementById('bDl').click();
+  document.querySelector('.bar').after(b)}
 const site=()=>S.sites[S.cur];
+
+/* ---------- undo / redo: JSON snapshots of S ----------
+   mutate(fn) snapshots before fn and records it if S changed. Typing is coalesced: beginEdit() keeps the
+   pre-edit snapshot until ~1 s idle or blur (commitEdit). Images are refs, so snapshots stay small. */
+const UNDO=[],REDO=[],UMAX=50;let editSnap=null,editT;
+const snap=()=>JSON.stringify(S);
+function pushUndo(b){UNDO.push(b);if(UNDO.length>UMAX)UNDO.shift();REDO.length=0;histUI()}
+function commitEdit(){clearTimeout(editT);if(editSnap!==null&&editSnap!==snap())pushUndo(editSnap);editSnap=null}
+function beginEdit(){if(editSnap===null)editSnap=snap();clearTimeout(editT);editT=setTimeout(commitEdit,1000)}
+function mutate(fn){commitEdit();const b=snap();const r=fn();if(snap()!==b)pushUndo(b);return r}
+function restore(json){S=migrate(JSON.parse(json));save();renderAll();loadImages(S).then(n=>{if(n)renderAll()});histUI()}
+function undo(){commitEdit();if(!UNDO.length)return false;REDO.push(snap());restore(UNDO.pop());return true}
+function redo(){commitEdit();if(!REDO.length)return false;UNDO.push(snap());if(UNDO.length>UMAX)UNDO.shift();restore(REDO.pop());return true}
+function histUI(){const u=document.getElementById('bUndo'),r=document.getElementById('bRedo');if(u)u.disabled=!UNDO.length;if(r)r.disabled=!REDO.length}
 
 /* ---------- path helpers for bound inputs ---------- */
 function getP(o,p){return p.split('.').reduce((a,k)=>a==null?a:a[k],o)}
@@ -299,30 +399,26 @@ const F=(label,path,opt={})=>{const v=getP(S,path)??'';
   return `<label class="f">${esc(label)}${opt.area?`<textarea data-b="${path}" rows="${opt.rows||2}" placeholder="${esc(opt.ph||'')}">${esc(v)}</textarea>`:
   `<input data-b="${path}" ${opt.num?'type="number" min="1"':''} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
 
-function renderTabs(){
-  const t=document.getElementById('tabs');
-  t.innerHTML=S.sites.map((s,i)=>`<div class="tabw" aria-selected="${i===S.cur}"><button class="tab" role="tab" aria-selected="${i===S.cur}" data-tab="${i}">${esc(s.name||'Untitled site')}</button>${S.sites.length>1?`<button class="tabx" data-tabx="${i}" title="Delete ${esc(s.name||'site')}" aria-label="Delete ${esc(s.name||'site')}">×</button>`:''}</div>`).join('')+
-  `<button class="tab add" data-act="addSite">+ Blank site</button>`;
-}
-function renderEditor(){
-  const s=site(),P=`sites.${S.cur}`;
-  let h=`<details class="card"><summary><span class="num">—</span><h3>Document cover</h3><span class="hint">Shared by all sites</span></summary><div class="body">
-    <div class="grid2">${F('Document title','doc.title')}${F('Customer / company','doc.company')}${F('Header logo text (used when no logo image)','doc.logoText')}</div>
-    <div class="sub-h"><label class="btn sm">Upload logo image<input type="file" accept="image/*" data-img="logo" hidden></label>${S.doc.logo==null?`<span class="chip">APJC logo</span><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:S.doc.logo?`<span class="chip">Custom logo</span><button class="btn sm" data-act="apjcLogo">Use APJC logo</button><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:`<button class="btn sm" data-act="apjcLogo">Use APJC logo</button>`}</div>
-  </div></details>`;
-
-  h+=`<details class="card" open><summary><span class="num">S</span><h3>Site</h3><span class="hint">${S.sites.length} site${S.sites.length>1?'s':''} in this document</span></summary><div class="body">
-    ${F('Site name (section heading)',P+'.name')}
-    <div class="sub-h"><button class="btn sm primary" data-act="dupSite">Duplicate this site as a new draft</button><button class="btn sm" data-act="moveL">Move left</button><button class="btn sm" data-act="moveR">Move right</button><span class="grow"></span>${confirmBtn('delSite','Delete site')}</div>
-    <p class="note">For a new site, duplicate the one most like it, then change names, racks and U numbers.</p>
-  </div></details>`;
-
-  h+=`<details class="card" open><summary><span class="num">1</span><h3>ข้อมูลเกี่ยวกับการสำรวจพื้นที่</h3><span class="hint">Survey info</span></summary><div class="body"><div class="grid2">
+/* ---------- section registry: one entry per numbered section of a site ----------
+   Section number = position + 1. x = {n, t (title), id (preview anchor)}; c = DOCX helpers from buildDocx().
+   page:false → doc() flows onto the site's current page; page:true → doc() returns its own .page divs and
+   pages(s) says how many (for the TOC). editor(s,P,si) returns the card body; ids: ed-<si>-<id>, pv-<si>-<id>. */
+const mdRow=(k,v)=>`| ${k} | ${String(v??'').replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
+const MDH='| หัวข้อ | รายละเอียด |\n|---|---|\n';
+const SECTIONS=[
+{id:'info',title:'ข้อมูลเกี่ยวกับการสำรวจพื้นที่',hint:'Survey info',page:false,
+  editor:(s,P)=>`<div class="grid2">
     ${F('ชื่อหน่วยงาน',P+'.info.agency')}${F('สถานที่/ที่อยู่',P+'.info.location')}
     ${F('วัน-เวลาที่สำรวจ',P+'.info.datetime',{ph:'วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.'})}${F('ผู้เข้าสำรวจพื้นที่',P+'.info.surveyors',{area:1,ph:'One name per line'})}
-  </div></div></details>`;
-
-  h+=`<details class="card" open><summary><span class="num">2</span><h3>ข้อมูลสถานที่ติดตั้ง</h3><span class="hint">Location & floor plan</span></summary><div class="body"><div class="grid2">
+  </div>`,
+  doc:(s,si,x)=>`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>
+    <table class="t">${kv('ชื่อหน่วยงาน',s.info.agency)}${kv('สถานที่/ที่อยู่',s.info.location)}${kv('วัน-เวลาที่สำรวจ',s.info.datetime)}<tr><td class="k" style="height:38px">ผู้เข้าสำรวจพื้นที่</td><td>${esc(s.info.surveyors).replace(/\n/g,'<br>')}</td></tr></table>
+    `,
+  md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${MDH}${[mdRow('ชื่อหน่วยงาน',s.info.agency),mdRow('สถานที่/ที่อยู่',s.info.location),mdRow('วัน-เวลาที่สำรวจ',s.info.datetime),mdRow('ผู้เข้าสำรวจพื้นที่',s.info.surveyors)].join('\n')}\n`,
+  docx:async(s,x,c)=>c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:x.pb,keep:1,before:120,after:120})+
+    c.tbl([c.kvr('ชื่อหน่วยงาน',s.info.agency),c.kvr('สถานที่/ที่อยู่',s.info.location),c.kvr('วัน-เวลาที่สำรวจ',s.info.datetime),c.kvr('ผู้เข้าสำรวจพื้นที่',s.info.surveyors||' ')])},
+{id:'place',title:'ข้อมูลสถานที่ติดตั้ง',hint:'Location & floor plan',page:false,
+  editor:(s,P)=>`<div class="grid2">
     ${F('สถานที่ติดตั้งอุปกรณ์',P+'.place.equipment')}${F('ชื่ออาคาร/ชั้น',P+'.place.building')}${F('ที่อยู่',P+'.place.address')}${F('ห้อง/หมายเลขตู้',P+'.place.racks')}</div>
     <div class="sub"><div class="sub-h"><b>แผนผังห้องโดยสังเขป</b><span class="grow"></span>
       <label class="f" style="flex-direction:row;align-items:center;gap:6px">Rows run<select data-b="${P}.floor.orient"><option value="h" ${s.floor.orient==='h'?'selected':''}>Left → right</option><option value="v" ${s.floor.orient==='v'?'selected':''}>Top → bottom</option></select></label>
@@ -334,12 +430,20 @@ function renderEditor(){
         <button class="x" title="Move up" data-act="fUp" data-i="${i}">↑</button><button class="x" title="Move down" data-act="fDn" data-i="${i}">↓</button><button class="x" title="Remove" data-act="fDel" data-i="${i}">×</button></div>`).join('')}
         <div class="sub-h"><button class="btn sm" data-act="fAddRow">+ Rack row</button><button class="btn sm" data-act="fAddLbl">+ Aisle label</button></div>
         <p class="note">Type rack names separated by commas; leave a gap between commas for an empty position (<code>, , 10, 09</code>). Click a rack in the plan to mark it as an install rack.</p>
-      </div></div></div>
-  </div></details>`;
-
-  h+=`<details class="card" open><summary><span class="num">3</span><h3>ข้อมูลจุดติดตั้งในตู้ Rack</h3><span class="hint">${s.racks.length} rack${s.racks.length!==1?'s':''}</span></summary><div class="body">`;
-  s.racks.forEach((r,ri)=>{const RP=`${P}.racks.${ri}`,w=rackWarnings(r);
-    h+=`<div class="sub"><div class="sub-h"><b>${esc(r.device||'Device')} · ${esc(r.rack||'Rack')}</b><span class="chip">${unitsOf(r)} U · ${esc(uLabel(r)||'—')}</span><span class="grow"></span>
+      </div></div></div>`,
+  doc:(s,si,x)=>`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>
+    <table class="t"><tr><td colspan="2" class="hd">สถานที่ติดตั้งอุปกรณ์ ${esc(s.place.equipment)}</td></tr>${kv('ชื่ออาคาร/ชั้น',s.place.building)}${kv('ที่อยู่',s.place.address)}${kv('ห้อง/หมายเลขตู้',s.place.racks)}
+    <tr><td colspan="2" class="hd">แผนผังห้องโดยสังเขป</td></tr><tr><td colspan="2" class="fig">${floorSVG(s.floor,false)}</td></tr></table>`,
+  md:(s,x)=>{let m=`\n### ${x.n}. ${x.t}\n\n**สถานที่ติดตั้งอุปกรณ์** ${s.place.equipment}\n\n${MDH}${[mdRow('ชื่ออาคาร/ชั้น',s.place.building),mdRow('ที่อยู่',s.place.address),mdRow('ห้อง/หมายเลขตู้',s.place.racks)].join('\n')}\n\n**แผนผังห้องโดยสังเขป** (${s.floor.orient==='v'?'แนวตั้ง':'แนวนอน'}; [x] = ตู้ที่ติดตั้ง)\n\n`;
+    s.floor.items.forEach(it=>{m+=it.type==='label'?`- _${it.text}_\n`:`- ${it.racks.map(r=>r.n?(r.on?`[${r.n}]`:r.n):'·').join(' | ')}\n`});return m},
+  docx:async(s,x,c)=>{let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:x.pb,keep:1,before:200,after:120});
+    const fp=await svgStrToPng(floorSVG(s.floor,false));let fimg='';
+    if(fp){const m=c.addMedia(fp.url);fimg=c.pic(m.rid,fp.w,fp.h,560)}
+    return b+c.tbl([c.span(c.run('สถานที่ติดตั้งอุปกรณ์ '+s.place.equipment,{b:1})),c.kvr('ชื่ออาคาร/ชั้น',s.place.building),c.kvr('ที่อยู่',s.place.address),c.kvr('ห้อง/หมายเลขตู้',s.place.racks),c.span(c.run('แผนผังห้องโดยสังเขป',{b:1})),c.span(fimg,'center')])}},
+{id:'racks',title:'ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ',short:'ข้อมูลจุดติดตั้งในตู้ Rack',
+  hint:s=>`${s.racks.length} rack${s.racks.length!==1?'s':''}`,page:true,pages:s=>s.racks.length,
+  editor:(s,P,si)=>s.racks.map((r,ri)=>{const RP=`${P}.racks.${ri}`,w=rackWarnings(r);
+    return `<div class="sub" id="ed-${si}-racks-rack-${ri}"><div class="sub-h"><b>${esc(r.device||'Device')} · ${esc(r.rack||'Rack')}</b><span class="chip">${unitsOf(r)} U · ${esc(uLabel(r)||'—')}</span><span class="grow"></span>
       <button class="x" title="Move up" data-act="rUp" data-i="${ri}">↑</button><button class="x" title="Move down" data-act="rDn" data-i="${ri}">↓</button><button class="btn sm" data-act="rDup" data-i="${ri}">Duplicate</button>${confirmBtn('rDel','Delete',ri)}</div>
       <div class="grid2">${F('อุปกรณ์ (หัวตาราง “ข้อมูลจุดติดตั้ง … ในตู้”)',RP+'.device')}${F('ห้อง/หมายเลขตู้',RP+'.rack')}${F('Rack height (U)',RP+'.size',{num:1})}</div>
       <b style="font-size:12px;color:var(--muted)">Devices in rack — U is the lowest unit the device sits on</b>
@@ -352,48 +456,88 @@ function renderEditor(){
       <b style="font-size:12px;color:var(--muted)">ระยะและแนวการเดินสายสัญญาณ — one cable run per line</b>
       ${r.cables.map((c,ci)=>`<div class="row-line cab">${F('Cable type',`${RP}.cables.${ci}.type`)}${F('Runs',`${RP}.cables.${ci}.text`,{area:1,rows:2,ph:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'})}<button class="x" data-act="cDel" data-i="${ri}" data-j="${ci}" title="Remove cable">×</button></div>`).join('')}
       <div class="sub-h"><button class="btn sm" data-act="cAdd" data-i="${ri}">+ Cable type</button></div>
-    </div>`});
-  h+=`<div class="sub-h"><button class="btn primary" data-act="rAdd">+ Add rack</button></div></div></details>`;
+    </div>`}).join('')+`<div class="sub-h"><button class="btn primary" data-act="rAdd">+ Add rack</button></div>`,
+  doc:(s,si,x)=>s.racks.map((r,i)=>`<div class="page" id="pv-${si}-racks-rack-${i}">${logoHTML()}${i===0?`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>`:''}
+    <table class="t"><tr><td colspan="2"><b>ข้อมูลจุดติดตั้ง ${esc(r.device)} ในตู้</b> ${esc(r.rack)}</td></tr>${kv('ห้อง/หมายเลขตู้',r.rack)}${kv('จำนวน Unit',unitsOf(r)+' Unit')}${kv('หมายเลข Unit',uLabel(r))}
+    <tr><td colspan="2" class="fig">${rackSVG(r)}</td></tr>
+    <tr><td colspan="2" class="hd">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack</td></tr>${kv('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}${r.power.map((p,j)=>kv('แหล่งที่ '+(j+1),p)).join('')}
+    <tr><td colspan="2" class="hd">ระยะและแนวการเดินสายสัญญาณ</td></tr>${r.cables.map(c=>`<tr><td class="k">${esc(c.type)}</td><td>${(c.text||'').split('\n').map(l=>`<span class="ln">${esc(l)}</span>`).join('')}</td></tr>`).join('')}</table></div>`).join(''),
+  md:(s,x)=>`\n### ${x.n}. ${x.t}\n`+s.racks.map(r=>
+    `\n#### ข้อมูลจุดติดตั้ง ${r.device} ในตู้ ${r.rack}\n\n${MDH}${[mdRow('ห้อง/หมายเลขตู้',r.rack),mdRow('จำนวน Unit',unitsOf(r)+' Unit'),mdRow('หมายเลข Unit',uLabel(r)),mdRow('ขนาดตู้',r.size+'U')].join('\n')}\n`+
+    `\nอุปกรณ์ในตู้: ${r.devices.map(d=>`${d.name} @ U${d.u}${+d.h>1?`–${+d.u+ +d.h-1}`:''}`).join(', ')}\n`+
+    `\n**ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack**\n\n${MDH}${mdRow('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}\n${r.power.map((p,j)=>mdRow('แหล่งที่ '+(j+1),p)).join('\n')}\n`+
+    `\n**ระยะและแนวการเดินสายสัญญาณ**\n\n| สาย | รายละเอียด |\n|---|---|\n${r.cables.map(c=>mdRow(c.type,c.text)).join('\n')}\n`).join(''),
+  docx:async(s,x,c)=>{let b='';
+    for(let i=0;i<s.racks.length;i++){const r=s.racks[i];
+      b+=c.para(i===0?c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}):'',{style:i===0?'Heading2':null,pb:1,keep:1,after:120});
+      const rp=await svgStrToPng(rackSVG(r));let rimg='';if(rp){const m=c.addMedia(rp.url);rimg=c.pic(m.rid,rp.w,rp.h,420)}
+      b+=c.tbl([c.span(c.run(`ข้อมูลจุดติดตั้ง ${r.device} ในตู้ `,{b:1})+c.run(r.rack)),c.kvr('ห้อง/หมายเลขตู้',r.rack),c.kvr('จำนวน Unit',unitsOf(r)+' Unit'),c.kvr('หมายเลข Unit',uLabel(r)),c.span(rimg,'center'),
+        c.span(c.run('ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack',{b:1})),c.kvr('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง'),...r.power.map((p,j)=>c.kvr('แหล่งที่ '+(j+1),p)),
+        c.span(c.run('ระยะและแนวการเดินสายสัญญาณ',{b:1})),...r.cables.map(cb=>c.kvr(cb.type,cb.text))])}
+    return b}},
+{id:'diagram',title:'แผนภาพการเชื่อมต่ออุปกรณ์ระบบ',hint:'Connection diagram',page:true,pages:()=>1,
+  editor:(s,P)=>{const im=diagImg(s);return `<div class="imgdrop">${im?`<img src="${im}" alt="Connection diagram">`:'No diagram yet. Upload a PNG or JPG exported from Visio, draw.io or PowerPoint.'}
+      <div class="sub-h" style="justify-content:center;margin-top:6px"><label class="btn sm">${im?'Replace image':'Upload diagram'}<input type="file" accept="image/*" data-img="diagram" hidden></label>${im?`<button class="btn sm danger" data-act="rmDiag">Remove</button>`:''}</div></div>
+    ${F('Caption / notes',P+'.diagram.caption',{area:1})}`},
+  doc:(s,si,x)=>{const im=diagImg(s);return `<div class="page">${logoHTML()}<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5><div class="diagram">${im?`<img src="${im}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`},
+  md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${diagImg(s)?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${s.diagram.caption}`:''}\n`,
+  docx:async(s,x,c)=>{const im=diagImg(s);let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
+    if(im){const sz=await imgSize(im);const m=c.addMedia(im);b+=c.para(c.pic(m.rid,sz.w,sz.h,640),{align:'center'})}
+    else b+=c.para(c.run('(แนบแผนภาพการเชื่อมต่อ)',{color:'888888'}),{align:'center'});
+    if(s.diagram.caption)b+=c.para(c.run(s.diagram.caption,{sz:18}),{align:'center'});
+    return b}},
+];
+const secX=(sec,k,si)=>({n:k+1,t:sec.title,id:`pv-${si}-${sec.id}`});
+/* Page plan shared by the preview TOC and the DOCX TOC: cover=1, TOC=2, then per site. */
+function pagePlan(){let pg=3;
+  const sites=S.sites.map(s=>{const start=pg;let cur=pg,open=true;
+    const secs=SECTIONS.map(sec=>{if(sec.page){const p=cur+1;cur+=sec.pages(s);open=false;return p}if(!open){cur++;open=true}return cur});
+    pg=cur+1;return {s,start,secs}});
+  return {sites,pages:pg-1}}
 
-  h+=`<details class="card" open><summary><span class="num">4</span><h3>แผนภาพการเชื่อมต่ออุปกรณ์ระบบ</h3><span class="hint">Connection diagram</span></summary><div class="body">
-    <div class="imgdrop">${s.diagram.img?`<img src="${s.diagram.img}" alt="Connection diagram">`:'No diagram yet. Upload a PNG or JPG exported from Visio, draw.io or PowerPoint.'}
-      <div class="sub-h" style="justify-content:center;margin-top:6px"><label class="btn sm">${s.diagram.img?'Replace image':'Upload diagram'}<input type="file" accept="image/*" data-img="diagram" hidden></label>${s.diagram.img?`<button class="btn sm danger" data-act="rmDiag">Remove</button>`:''}</div></div>
-    ${F('Caption / notes',P+'.diagram.caption',{area:1})}
+function renderTabs(){
+  const t=document.getElementById('tabs');
+  t.innerHTML=S.sites.map((s,i)=>`<div class="tabw" aria-selected="${i===S.cur}"><button class="tab" role="tab" aria-selected="${i===S.cur}" data-tab="${i}">${esc(s.name||'Untitled site')}</button>${S.sites.length>1?`<button class="tabx" data-tabx="${i}" title="Delete ${esc(s.name||'site')}" aria-label="Delete ${esc(s.name||'site')}">×</button>`:''}</div>`).join('')+
+  `<button class="tab add" data-act="addSite">+ Blank site</button>`;
+}
+function renderEditor(){
+  const s=site(),P=`sites.${S.cur}`;
+  let h=`<details class="card" id="ed-doc"><summary><span class="num">—</span><h3>Document cover</h3><span class="hint">Shared by all sites</span></summary><div class="body">
+    <div class="grid2">${F('Document title','doc.title')}${F('Customer / company','doc.company')}${F('Header logo text (used when no logo image)','doc.logoText')}</div>
+    <div class="sub-h"><label class="btn sm">Upload logo image<input type="file" accept="image/*" data-img="logo" hidden></label>${S.doc.logo==null?`<span class="chip">APJC logo</span><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:S.doc.logo?`<span class="chip">Custom logo</span><button class="btn sm" data-act="apjcLogo">Use APJC logo</button><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:`<button class="btn sm" data-act="apjcLogo">Use APJC logo</button>`}</div>
   </div></details>`;
+
+  h+=`<details class="card" open id="ed-${S.cur}-site"><summary><span class="num">S</span><h3>Site</h3><span class="hint">${S.sites.length} site${S.sites.length>1?'s':''} in this document</span></summary><div class="body">
+    ${F('Site name (section heading)',P+'.name')}
+    <div class="sub-h"><button class="btn sm primary" data-act="dupSite">Duplicate this site as a new draft</button><button class="btn sm" data-act="moveL">Move left</button><button class="btn sm" data-act="moveR">Move right</button><span class="grow"></span>${confirmBtn('delSite','Delete site')}</div>
+    <p class="note">For a new site, duplicate the one most like it, then change names, racks and U numbers.</p>
+  </div></details>`;
+
+  SECTIONS.forEach((sec,k)=>{const hint=typeof sec.hint==='function'?sec.hint(s):sec.hint;
+    h+=`<details class="card" open id="ed-${S.cur}-${sec.id}"><summary><span class="num">${k+1}</span><h3>${sec.short||sec.title}</h3><span class="hint">${hint}</span></summary><div class="body">${sec.editor(s,P,S.cur)}</div></details>`});
   document.getElementById('editor').innerHTML=h;
 }
 function confirmBtn(act,label,i){return `<button class="btn sm danger" data-confirm="${act}" ${i!=null?`data-i="${i}"`:''}>${label}</button>`}
 
 /* ---------- document preview ---------- */
-function logoSrc(){return S.doc.logo===null||S.doc.logo===undefined?APJC_LOGO:S.doc.logo}
+function logoSrc(){return S.doc.logo===null||S.doc.logo===undefined?APJC_LOGO:imgURL(S.doc.logo)}
 function logoHTML(){const L=logoSrc();return `<div class="logo">${L?`<img src="${L}" alt="logo">`:`<span class="lt">${esc(S.doc.logoText||'')}</span>`}</div>`}
 const kv=(k,v)=>`<tr><td class="k">${esc(k)}</td><td>${esc(v).replace(/\n/g,'<br>')}</td></tr>`;
-function siteHTML(s){
-  let p1=`<div class="page">${logoHTML()}<h2>${esc(s.name)}</h2><h5>1.&nbsp; ข้อมูลเกี่ยวกับการสำรวจพื้นที่</h5>
-    <table class="t">${kv('ชื่อหน่วยงาน',s.info.agency)}${kv('สถานที่/ที่อยู่',s.info.location)}${kv('วัน-เวลาที่สำรวจ',s.info.datetime)}<tr><td class="k" style="height:38px">ผู้เข้าสำรวจพื้นที่</td><td>${esc(s.info.surveyors).replace(/\n/g,'<br>')}</td></tr></table>
-    <h5>2.&nbsp; ข้อมูลสถานที่ติดตั้ง</h5>
-    <table class="t"><tr><td colspan="2" class="hd">สถานที่ติดตั้งอุปกรณ์ ${esc(s.place.equipment)}</td></tr>${kv('ชื่ออาคาร/ชั้น',s.place.building)}${kv('ที่อยู่',s.place.address)}${kv('ห้อง/หมายเลขตู้',s.place.racks)}
-    <tr><td colspan="2" class="hd">แผนผังห้องโดยสังเขป</td></tr><tr><td colspan="2" class="fig">${floorSVG(s.floor,false)}</td></tr></table></div>`;
-  let p3=s.racks.map((r,i)=>`<div class="page">${logoHTML()}${i===0?`<h5>3.&nbsp; ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ</h5>`:''}
-    <table class="t"><tr><td colspan="2"><b>ข้อมูลจุดติดตั้ง ${esc(r.device)} ในตู้</b> ${esc(r.rack)}</td></tr>${kv('ห้อง/หมายเลขตู้',r.rack)}${kv('จำนวน Unit',unitsOf(r)+' Unit')}${kv('หมายเลข Unit',uLabel(r))}
-    <tr><td colspan="2" class="fig">${rackSVG(r)}</td></tr>
-    <tr><td colspan="2" class="hd">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack</td></tr>${kv('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}${r.power.map((p,j)=>kv('แหล่งที่ '+(j+1),p)).join('')}
-    <tr><td colspan="2" class="hd">ระยะและแนวการเดินสายสัญญาณ</td></tr>${r.cables.map(c=>`<tr><td class="k">${esc(c.type)}</td><td>${(c.text||'').split('\n').map(l=>`<span class="ln">${esc(l)}</span>`).join('')}</td></tr>`).join('')}</table></div>`).join('');
-  let p4=`<div class="page">${logoHTML()}<h5>4.&nbsp; แผนภาพการเชื่อมต่ออุปกรณ์ระบบ</h5><div class="diagram">${s.diagram.img?`<img src="${s.diagram.img}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`;
-  return p1+p3+p4;
+function siteHTML(s,si){  // flow sections share the site's open page; page sections bring their own .page divs
+  let h='',pg=`<div class="page" id="pv-${si}">${logoHTML()}<h2>${esc(s.name)}</h2>`;
+  SECTIONS.forEach((sec,k)=>{const x=secX(sec,k,si);
+    if(sec.page){if(pg){h+=pg+'</div>';pg=''}h+=sec.doc(s,si,x)}
+    else{if(!pg)pg=`<div class="page">${logoHTML()}`;pg+=sec.doc(s,si,x)}});
+  return h+(pg?pg+'</div>':'');
 }
-const SECS=['ข้อมูลเกี่ยวกับการสำรวจพื้นที่','ข้อมูลสถานที่ติดตั้ง','ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ','แผนภาพการเชื่อมต่ออุปกรณ์ระบบ'];
 function docHTML(){
-  let h=`<div class="page cover">${logoHTML()}<hr><h1>${esc(S.doc.title)}</h1><hr><div class="co">${esc(S.doc.company)}</div>
+  let h=`<div class="page cover" id="pv-cover">${logoHTML()}<hr><h1>${esc(S.doc.title)}</h1><hr><div class="co">${esc(S.doc.company)}</div>
     <div class="sc">ขอบเขตการสำรวจ<br>${S.sites.map(s=>'— '+esc(s.name)).join('<br>')}</div></div>`;
-  // page numbers follow the layout above: cover=1, toc=2, then per site 1 + racks + 1
-  let pg=3,toc='';
-  S.sites.forEach(s=>{const p1=pg,p3=pg+1,p4=pg+1+s.racks.length;
-    toc+=`<div class="e"><span>${esc(s.name)}</span><span>${p1}</span></div>`+[p1,p1,p3,p4].map((n,i)=>`<div class="e s"><span>${i+1}.&nbsp; ${SECS[i]}</span><span>${n}</span></div>`).join('');
-    pg=p4+1});
-  h+=`<div class="page toc">${logoHTML()}<h4>สารบัญ</h4>${toc}</div>`;
+  const plan=pagePlan();let toc='';
+  plan.sites.forEach(p=>{toc+=`<div class="e"><span>${esc(p.s.name)}</span><span>${p.start}</span></div>`+p.secs.map((n,i)=>`<div class="e s"><span>${i+1}.&nbsp; ${SECTIONS[i].title}</span><span>${n}</span></div>`).join('')});
+  h+=`<div class="page toc" id="pv-toc">${logoHTML()}<h4>สารบัญ</h4>${toc}</div>`;
   h+=S.sites.map(siteHTML).join('');
-  return {h,pages:pg-1};
+  return {h,pages:plan.pages};
 }
 function renderDoc(){const d=docHTML();document.getElementById('doc').innerHTML=d.h;
   document.getElementById('pvMeta').textContent=`${d.pages} pages · ${S.sites.length} sites`;
@@ -402,20 +546,8 @@ function renderAll(){renderTabs();renderEditor();renderDoc()}
 
 /* ---------- markdown export ---------- */
 function toMarkdown(){
-  const row=(k,v)=>`| ${k} | ${String(v??'').replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
   let m=`# ${S.doc.title}\n\n${S.doc.company}\n\n**ขอบเขตการสำรวจ**\n\n${S.sites.map(s=>'- '+s.name).join('\n')}\n`;
-  S.sites.forEach(s=>{
-    m+=`\n---\n\n## ${s.name}\n\n### 1. ${SECS[0]}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ชื่อหน่วยงาน',s.info.agency),row('สถานที่/ที่อยู่',s.info.location),row('วัน-เวลาที่สำรวจ',s.info.datetime),row('ผู้เข้าสำรวจพื้นที่',s.info.surveyors)].join('\n')}\n`;
-    m+=`\n### 2. ${SECS[1]}\n\n**สถานที่ติดตั้งอุปกรณ์** ${s.place.equipment}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ชื่ออาคาร/ชั้น',s.place.building),row('ที่อยู่',s.place.address),row('ห้อง/หมายเลขตู้',s.place.racks)].join('\n')}\n\n**แผนผังห้องโดยสังเขป** (${s.floor.orient==='v'?'แนวตั้ง':'แนวนอน'}; [x] = ตู้ที่ติดตั้ง)\n\n`;
-    s.floor.items.forEach(it=>{m+=it.type==='label'?`- _${it.text}_\n`:`- ${it.racks.map(r=>r.n?(r.on?`[${r.n}]`:r.n):'·').join(' | ')}\n`});
-    m+=`\n### 3. ${SECS[2]}\n`;
-    s.racks.forEach(r=>{
-      m+=`\n#### ข้อมูลจุดติดตั้ง ${r.device} ในตู้ ${r.rack}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ห้อง/หมายเลขตู้',r.rack),row('จำนวน Unit',unitsOf(r)+' Unit'),row('หมายเลข Unit',uLabel(r)),row('ขนาดตู้',r.size+'U')].join('\n')}\n`;
-      m+=`\nอุปกรณ์ในตู้: ${r.devices.map(d=>`${d.name} @ U${d.u}${+d.h>1?`–${+d.u+ +d.h-1}`:''}`).join(', ')}\n`;
-      m+=`\n**ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack**\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${row('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}\n${r.power.map((p,j)=>row('แหล่งที่ '+(j+1),p)).join('\n')}\n`;
-      m+=`\n**ระยะและแนวการเดินสายสัญญาณ**\n\n| สาย | รายละเอียด |\n|---|---|\n${r.cables.map(c=>row(c.type,c.text)).join('\n')}\n`});
-    m+=`\n### 4. ${SECS[3]}\n\n${s.diagram.img?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${s.diagram.caption}`:''}\n`;
-  });
+  S.sites.forEach((s,si)=>{m+=`\n---\n\n## ${s.name}\n`+SECTIONS.map((sec,k)=>sec.md(s,secX(sec,k,si))).join('')});
   return m;
 }
 
@@ -444,6 +576,14 @@ async function copyWord(){
 
 /* ---------- modals & toast ---------- */
 function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
+/* toastUndo(msg): announces msg (aria-live polite) with an Undo button; call it right after a destructive mutate(). */
+let tuT;
+function toastUndo(msg){let host=document.getElementById('toastUndo');
+  if(!host){host=document.createElement('div');host.id='toastUndo';host.setAttribute('aria-live','polite');document.body.appendChild(host)}
+  clearTimeout(tuT);host.innerHTML=`<div class="toast toast-undo" role="status"><span></span><button class="btn sm" type="button">Undo</button></div>`;
+  host.querySelector('span').textContent=msg;
+  host.querySelector('button').onclick=()=>{host.innerHTML='';undo()};
+  tuT=setTimeout(()=>{host.innerHTML=''},6000)}
 function modal(title,body,btns){const root=document.getElementById('modalRoot');
   root.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-card"><header><h3>${esc(title)}</h3>${btns||''}<button class="x" data-close aria-label="Close">×</button></header><div class="mb">${body}</div></div></div>`;
   root.querySelector('[data-close]').onclick=()=>root.innerHTML='';root.querySelector('.modal').addEventListener('click',e=>{if(e.target.classList.contains('modal'))root.innerHTML=''});}
@@ -452,39 +592,41 @@ async function copyText(t,ta){try{await navigator.clipboard.writeText(t);toast('
 document.getElementById('bMd').onclick=()=>{const md=toMarkdown();modal('Markdown',`<p class="note">Paste into a .md file, Notion, Confluence or a chat.</p><textarea id="mdOut" readonly>${esc(md)}</textarea>`,`<button class="btn sm primary" id="mdCopy">Copy</button>`);
   document.getElementById('mdCopy').onclick=()=>copyText(md,document.getElementById('mdOut'))};
 document.getElementById('bWord').onclick=copyWord;
-document.getElementById('bJson').onclick=()=>{const js=JSON.stringify(S,null,1);
+document.getElementById('bJson').onclick=()=>{const js=exportJSON();
   modal('Save / load JSON',`<p class="note">Copy this text into a .json file to keep the draft or send it to a colleague. To load, choose a .json file or paste the text and press Load.</p>
     <textarea id="jsOut">${esc(js)}</textarea><div class="sub-h"><label class="btn sm">Choose .json file<input type="file" accept=".json,application/json" id="jsFile" hidden></label><span class="grow"></span><span class="warn" id="jsErr"></span></div>`,
     `<button class="btn sm" id="jsCopy">Copy</button><button class="btn sm primary" id="jsLoad">Load</button>`);
   const ta=document.getElementById('jsOut');
   document.getElementById('jsCopy').onclick=()=>copyText(ta.value,ta);
   document.getElementById('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
-  document.getElementById('jsLoad').onclick=()=>{try{const o=JSON.parse(ta.value);if(!o.sites||!o.doc)throw 0;S=o;S.cur=0;save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Draft loaded')}
-    catch(e){document.getElementById('jsErr').textContent='This is not a survey JSON. Check that you copied the whole text.'}};
+  document.getElementById('jsLoad').onclick=async()=>{let o;try{o=migrate(JSON.parse(ta.value));if(!o||!o.sites.length)throw 0}
+    catch(e){document.getElementById('jsErr').textContent='This is not a survey JSON. Check that you copied the whole text.';return}
+    o.cur=0;await internImages(o);mutate(()=>{S=o});save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Draft loaded')};
 };
 document.getElementById('bReset').onclick=()=>modal('Reset',`<p>Choose what to start from. Your current draft in this browser will be replaced.</p>
   <div class="sub-h"><button class="btn primary" id="rsSample">NT sample (Sriracha + Bangkok)</button><button class="btn" id="rsBlank">One blank site</button></div>`);
 document.getElementById('modalRoot').addEventListener('click',e=>{
-  if(e.target.id==='rsSample'){S=sample()}else if(e.target.id==='rsBlank'){S={doc:{...S.doc,title:'Site Survey'},sites:[blankSite(1)],cur:0}}else return;
+  if(e.target.id==='rsSample'){mutate(()=>{S=sample()})}else if(e.target.id==='rsBlank'){mutate(()=>{S={v:SCHEMA,doc:{...S.doc,title:'Site Survey'},sites:[blankSite(1)],cur:0}})}else return;
   save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Reset done')});
 
 /* ---------- editor events ---------- */
 const ed=document.getElementById('editor');
 let liveT;
 ed.addEventListener('input',e=>{const t=e.target;
-  if(t.dataset.b){let v=t.value;if(t.type==='number')v=v===''?'':Math.max(1,parseInt(v,10)||1);setP(S,t.dataset.b,v);save();
+  if(t.dataset.b){let v=t.value;if(t.type==='number')v=v===''?'':Math.max(1,parseInt(v,10)||1);beginEdit();setP(S,t.dataset.b,v);save();
     clearTimeout(liveT);liveT=setTimeout(()=>{renderDoc();if(/\.name$/.test(t.dataset.b)&&t.dataset.b.split('.').length===3)renderTabs();
       if(t.tagName==='SELECT'||/floor\./.test(t.dataset.b)){document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true)}},150)}
-  if(t.dataset.frow!=null){const it=site().floor.items[+t.dataset.frow];const old=it.racks;const names=t.value.split(',').map(x=>x.trim());
+  if(t.dataset.frow!=null){beginEdit();const it=site().floor.items[+t.dataset.frow];const old=it.racks;const names=t.value.split(',').map(x=>x.trim());
     it.racks=names.map((n,k)=>({n,on:!!(old.find(o=>o.n&&o.n===n)||{}).on}));save();
     document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}
 });
+ed.addEventListener('focusout',e=>{if(e.target.matches('input,textarea,select'))commitEdit()});
 ed.addEventListener('change',e=>{const t=e.target;
   if(t.dataset.b&&(t.tagName==='SELECT'||t.type==='number')){renderEditor();renderDoc()}
   if(t.dataset.fitype!=null){const i=+t.dataset.fitype,it=site().floor.items[i];
-    site().floor.items[i]=t.value==='row'?{id:it.id,type:'row',racks:[R('A1')]}:{id:it.id,type:'label',text:'Front'};save();renderEditor();renderDoc()}
-  if(t.dataset.img){const f=t.files[0];if(!f)return;shrink(f,t.dataset.img==='logo'?400:1600).then(url=>{
-    if(t.dataset.img==='logo')S.doc.logo=url;else site().diagram.img=url;save();renderEditor();renderDoc()})}
+    mutate(()=>{site().floor.items[i]=t.value==='row'?{id:it.id,type:'row',racks:[R('A1')]}:{id:it.id,type:'label',text:'Front'}});save();renderEditor();renderDoc()}
+  if(t.dataset.img){const f=t.files[0];if(!f)return;const kind=t.dataset.img,sd=site();shrink(f,kind==='logo'?400:1600).then(putImg).then(ref=>{
+    mutate(()=>{if(kind==='logo')S.doc.logo=ref;else sd.diagram.img=ref});save();renderEditor();renderDoc()})}
 });
 function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
   const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
@@ -493,7 +635,7 @@ function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.on
 const mv=(a,i,d)=>{const j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]]};
 ed.addEventListener('click',e=>{
   const tog=e.target.closest('[data-tog]');
-  if(tog){const [i,j]=tog.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];if(rk.n){rk.on=!rk.on;save();document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}return}
+  if(tog){const [i,j]=tog.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];if(rk.n){mutate(()=>{rk.on=!rk.on});save();document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}return}
   const cb=e.target.closest('[data-confirm]');
   if(cb){if(cb.dataset.armed){act(cb.dataset.confirm,+cb.dataset.i)}else{cb.dataset.armed='1';cb.textContent='Click again to delete';setTimeout(()=>{if(cb.isConnected){delete cb.dataset.armed;cb.textContent=cb.dataset.confirm==='delSite'?'Delete site':'Delete'}},3000)}return}
   const b=e.target.closest('[data-act]');if(!b)return;act(b.dataset.act,+b.dataset.i,+b.dataset.j);
@@ -501,16 +643,17 @@ ed.addEventListener('click',e=>{
 document.getElementById('tabs').addEventListener('click',e=>{
   const x=e.target.closest('[data-tabx]');
   if(x){const i=+x.dataset.tabx;
-    if(x.dataset.armed){S.sites.splice(i,1);if(S.cur>i||S.cur>=S.sites.length)S.cur=Math.max(0,S.cur-1);save();renderAll();toast('Site deleted');return}
+    if(x.dataset.armed){mutate(()=>{S.sites.splice(i,1);if(S.cur>i||S.cur>=S.sites.length)S.cur=Math.max(0,S.cur-1)});save();renderAll();toast('Site deleted');return}
     x.dataset.armed='1';x.textContent='Delete?';x.classList.add('armed');
     setTimeout(()=>{if(x.isConnected){delete x.dataset.armed;x.textContent='×';x.classList.remove('armed')}},3000);return}
   const t=e.target.closest('[data-tab]');if(t){S.cur=+t.dataset.tab;save();renderAll();return}
   if(e.target.closest('[data-act="addSite"]'))act('addSite')});
-function act(a,i,j){const s=site(),fl=s.floor.items;
+function act(a,i,j){if(mutate(()=>doAct(a,i,j))!==false){save();renderAll()}}  // every action is one undo step
+function doAct(a,i,j){const s=site(),fl=s.floor.items;
   switch(a){
     case 'addSite':S.sites.push(blankSite(S.sites.length+1));S.cur=S.sites.length-1;break;
     case 'dupSite':S.sites.splice(S.cur+1,0,cloneSite(s));S.cur++;toast('Copy created — rename it and edit the racks');break;
-    case 'delSite':if(S.sites.length===1){toast('A document needs at least one site');return}S.sites.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);break;
+    case 'delSite':if(S.sites.length===1){toast('A document needs at least one site');return false}S.sites.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);break;
     case 'moveL':if(S.cur>0){mv(S.sites,S.cur,-1);S.cur--}break;
     case 'moveR':if(S.cur<S.sites.length-1){mv(S.sites,S.cur,1);S.cur++}break;
     case 'rmLogo':S.doc.logo='';break;
@@ -529,10 +672,14 @@ function act(a,i,j){const s=site(),fl=s.floor.items;
     case 'pDel':s.racks[i].power.splice(j,1);break;
     case 'cAdd':s.racks[i].cables.push({id:uid(),type:'สาย ',text:''});break;
     case 'cDel':s.racks[i].cables.splice(j,1);break;
-    default:return;
+    default:return false;
   }
-  save();renderAll();
 }
+document.addEventListener('keydown',e=>{  // app undo/redo; text fields keep their native undo
+  if(!(e.ctrlKey||e.metaKey)||e.altKey)return;const k=e.key.toLowerCase();if(k!=='z'&&k!=='y')return;
+  const t=e.target;if(t&&(t.isContentEditable||t.tagName==='TEXTAREA'||(t.tagName==='INPUT'&&!/^(button|checkbox|radio|file|submit|reset|range|color)$/.test(t.type))))return;
+  if(document.getElementById('modalRoot').firstChild)return;
+  e.preventDefault();if(k==='y'||e.shiftKey)redo();else undo()});
 /* ---------- save helper: claude downloads capability when hosted, plain link when offline ---------- */
 async function saveFile(name,data,mime){
   if(window.claude&&window.claude.use){
@@ -596,32 +743,19 @@ async function buildDocx(){
   b+=para('',{before:3600})+para(run(S.doc.title,{sz:64,color:TEAL}),{border:1,before:0,after:300});
   b+=para(run(S.doc.company,{sz:26}),{after:400});
   b+=para(run('ขอบเขตการสำรวจ',{sz:18}),{after:40})+S.sites.map(s=>para(run('— '+s.name,{sz:18}),{after:20})).join('');
-  // TOC: page numbers follow the one-section-per-page layout
+  // TOC: page numbers come from the same page plan as the preview
   b+=para(run('สารบัญ',{b:1,sz:26}),{pb:1,align:'center',after:200});
-  let pg=3,toc='';
-  S.sites.forEach(s=>{const p3=pg+1,p4=pg+1+s.racks.length;
-    toc+=para(run(s.name)+'<w:r><w:tab/></w:r>'+run(pg),{tabs:1,after:40});
-    [pg,pg,p3,p4].forEach((n,i)=>{toc+=para(run(`${i+1}.  ${SECS[i]}`,{b:1})+'<w:r><w:tab/></w:r>'+run(n),{tabs:1,ind:360,after:40})});pg=p4+1});
+  let toc='';
+  pagePlan().sites.forEach(p=>{
+    toc+=para(run(p.s.name)+'<w:r><w:tab/></w:r>'+run(p.start),{tabs:1,after:40});
+    p.secs.forEach((n,i)=>{toc+=para(run(`${i+1}.  ${SECTIONS[i].title}`,{b:1})+'<w:r><w:tab/></w:r>'+run(n),{tabs:1,ind:360,after:40})})});
   b+=toc;
-  for(const s of S.sites){
+  const c={run,para,tbl,kvr,span,pic,addMedia};
+  for(let si=0;si<S.sites.length;si++){const s=S.sites[si];let open=true;
     b+=para(run(s.name,{sz:34,color:TEAL}),{style:'Heading1',pb:1,after:200});
-    b+=para(run('1.  '+SECS[0],{b:1,sz:24}),{style:'Heading2',keep:1,before:120,after:120});
-    b+=tbl([kvr('ชื่อหน่วยงาน',s.info.agency),kvr('สถานที่/ที่อยู่',s.info.location),kvr('วัน-เวลาที่สำรวจ',s.info.datetime),kvr('ผู้เข้าสำรวจพื้นที่',s.info.surveyors||' ')]);
-    b+=para(run('2.  '+SECS[1],{b:1,sz:24}),{style:'Heading2',keep:1,before:200,after:120});
-    const fp=await svgStrToPng(floorSVG(s.floor,false));let fimg='';
-    if(fp){const m=addMedia(fp.url);fimg=pic(m.rid,fp.w,fp.h,560)}
-    b+=tbl([span(run('สถานที่ติดตั้งอุปกรณ์ '+s.place.equipment,{b:1})),kvr('ชื่ออาคาร/ชั้น',s.place.building),kvr('ที่อยู่',s.place.address),kvr('ห้อง/หมายเลขตู้',s.place.racks),span(run('แผนผังห้องโดยสังเขป',{b:1})),span(fimg,'center')]);
-    for(let i=0;i<s.racks.length;i++){const r=s.racks[i];
-      b+=para(i===0?run('3.  '+SECS[2],{b:1,sz:24}):'',{style:i===0?'Heading2':null,pb:1,keep:1,after:120});
-      const rp=await svgStrToPng(rackSVG(r));let rimg='';if(rp){const m=addMedia(rp.url);rimg=pic(m.rid,rp.w,rp.h,420)}
-      b+=tbl([span(run(`ข้อมูลจุดติดตั้ง ${r.device} ในตู้ `,{b:1})+run(r.rack)),kvr('ห้อง/หมายเลขตู้',r.rack),kvr('จำนวน Unit',unitsOf(r)+' Unit'),kvr('หมายเลข Unit',uLabel(r)),span(rimg,'center'),
-        span(run('ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack',{b:1})),kvr('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง'),...r.power.map((p,j)=>kvr('แหล่งที่ '+(j+1),p)),
-        span(run('ระยะและแนวการเดินสายสัญญาณ',{b:1})),...r.cables.map(c=>kvr(c.type,c.text))]);
-    }
-    b+=para(run('4.  '+SECS[3],{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
-    if(s.diagram.img){const sz=await imgSize(s.diagram.img);const m=addMedia(s.diagram.img);b+=para(pic(m.rid,sz.w,sz.h,640),{align:'center'})}
-    else b+=para(run('(แนบแผนภาพการเชื่อมต่อ)',{color:'888888'}),{align:'center'});
-    if(s.diagram.caption)b+=para(run(s.diagram.caption,{sz:18}),{align:'center'});
+    for(let k=0;k<SECTIONS.length;k++){const sec=SECTIONS[k],x=secX(sec,k,si);
+      x.pb=!sec.page&&!open;open=!sec.page;   // a flow section after a page section starts a new page
+      b+=await sec.docx(s,x,c)}
   }
   // header logo
   const L=logoSrc();let hdr='';
@@ -652,9 +786,17 @@ const fileBase=()=>(S.doc.title||'Site Survey').replace(/[\\/:*?"<>|]+/g,' ').tr
 document.getElementById('bDocx').onclick=async e=>{const btn=e.currentTarget;btn.disabled=true;const t=btn.textContent;btn.textContent='Building…';
   try{const blob=await buildDocx();await saveFile(fileBase()+'.docx',blob,blob.type)}catch(err){toast('Could not build the Word file: '+err.message)}
   btn.disabled=false;btn.textContent=t};
+document.getElementById('bDl').onclick=()=>saveFile(fileBase()+'.json',exportJSON(),'application/json');
 
-document.getElementById('bDl').onclick=()=>saveFile(fileBase()+'.json',JSON.stringify(S,null,1),'application/json');
-
-renderAll();
+/* ---------- start: load image cache before first render, move inline images to IndexedDB, then GC ---------- */
+(async()=>{
+  idbOpen();  // warm up: the first open can be slow on a fresh profile
+  let loaded=false;const lp=loadImages(S).then(n=>{loaded=true;return n});
+  await Promise.race([lp,new Promise(r=>setTimeout(r,2000))]);
+  renderAll();histUI();
+  if(!loaded)lp.then(n=>{if(n)renderAll()});  // slow IndexedDB: render now, re-render when images arrive
+  const before=snap();await internImages(S);if(snap()!==before)save();
+  setTimeout(()=>gcImages().catch(()=>{}),3000);
+})();
 })();
 </script>
