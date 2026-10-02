@@ -14,7 +14,8 @@ works offline.
 |---|---|
 | `index.html` | **Main source, offline/standalone build.** Full `<!doctype html>` document. Open it directly in Chrome/Edge. Has Print / Save PDF, Download .docx / JSON / .md. |
 | `artifact.html` | The same app as published to a claude.ai Artifact. There is no `<html>/<head>/<body>` (the host adds the skeleton) and it loads Google Fonts. Downloads go through `window.claude.use('downloads')`. The page has no Print button (the host frame blocks `window.print`). |
-| `sample.json` | Exported state with the two sample sites (NT Data Center Sriracha, NT Data Center Bangkok). Load it with **Save / load JSON** to get the sample data back. |
+| `sample.json` | Exported state with the two sample sites (NT Data Center Sriracha, NT Data Center Bangkok). Load it with **Export ▾ → Load JSON** to get the sample data back. |
+| `docs/design-mockup.html` | The approved static UI design (tokens, rail, device table, toast, mobile). Reference only; the real UI is in the two app files. |
 | `CLAUDE.md` | This file. |
 
 **Keep the two HTML files in sync.** Apart from the differences below, the code is identical.
@@ -25,7 +26,7 @@ When you change features, edit `index.html` first and port the change to `artifa
 | Wrapper | full doctype/html/head/body | content only, `<title>` first |
 | Fonts | system: `Leelawadee UI`, `Segoe UI`, Tahoma; mono `Consolas` | Google Fonts: IBM Plex Sans Thai, Sarabun, IBM Plex Mono |
 | localStorage key | `rack-site-survey-offline-v1` | `rack-site-survey-v1` |
-| Buttons | Download .docx, Print / Save PDF, Download JSON, Copy Markdown (+ Download .md in modal), Copy for Word, Save / load JSON, Reset | same minus Print and Download .md |
+| Buttons | ดาวน์โหลด .docx, Undo/Redo, and a ส่งออก ▾ menu: Print / Save PDF (`#bPrint`), Markdown (`#bMd`, copy + Download .md in the modal), Copy for Word (`#bWord`), Save JSON (`#bDl`), Load JSON (`#bJson`), Reset… (`#bReset`) | same minus Print and Download .md |
 | `@media print` / `@page A4` CSS | yes | no |
 | `dl()` blob-link helper | yes | no (uses `saveFile`) |
 
@@ -47,41 +48,68 @@ When you change features, edit `index.html` first and port the change to `artifa
   - `undo()` / `redo()` restore a snapshot, then `save()` + `renderAll()`. Shortcuts: Ctrl/Cmd+Z, Ctrl+Y, Ctrl+Shift+Z. They are ignored while focus is in a text input or textarea (those keep native undo) and while a modal is open.
   - `histUI()` enables/disables `#bUndo` / `#bRedo` if those buttons exist.
   - `toastUndo(msg)` shows a toast with an Undo button for 6 s inside the `#toastUndo` host (`aria-live=polite`). Call it after a destructive `act()`.
-- **Section registry**: `SECTIONS = [{id, title, short?, hint, page, pages?, editor(s,P,si), doc(s,si,x), md(s,x), docx(s,x,c)}]` holds the numbered per-site sections, currently `info`, `place`, `racks` and `diagram`. Each section's number is its position + 1.
-  - `renderEditor()`, `siteHTML()`, `toMarkdown()` and `buildDocx()` all loop over the registry. To add a section, add one entry.
+- **Section registry**: `SECTIONS = [{id, title, label, en, chip, page, pages?, done(s), sum(s), editor(s,P,si), doc(s,si,x), md(s,x), docx(s,x,c)}]` holds the numbered per-site sections, currently `info`, `place`, `racks` and `diagram`. Each section's number is its position + 1.
+  - `renderEditor()`, the rail/chips, `siteHTML()`, `toMarkdown()` and `buildDocx()` all loop over the registry. To add a section, add one entry.
+  - `title` is the document heading. `label`/`en` (Thai + muted English), `chip` (short phone label), `done(s)` (`'full'|'part'|'empty'`, drives the outline dot) and `sum(s)` (one-line card summary, HTML) are UI only and never reach the output. The racks section is special-cased in `navKeys()`/`renderRail()` (its racks are nested nav items).
   - Arguments: `x = {n, t, id}` from `secX()` (DOCX also gets `x.pb`), and `c` holds the DOCX helpers (`run, para, tbl, kvr, span, pic, addMedia`).
   - `page:false` sections flow onto the site's first page (after the `<h2>` site name). `page:true` sections return their own `.page` divs, and `pages(s)` gives their page count.
   - `pagePlan()` computes the TOC page numbers for both the preview and the DOCX.
 - **Element ids** (for nav and scroll-sync):
-  - Editor: `ed-doc` (cover card), `ed-<si>-site`, `ed-<si>-<sectionId>` (cards), `ed-<si>-racks-rack-<j>` (rack blocks).
+  - Editor: `ed-doc` (cover card), `ed-<si>-site`, `ed-<si>-<sectionId>` (cards), `ed-<si>-racks-rack-<j>` (rack cards). Every card is a `<details data-k data-nav>`.
+  - Chrome: `bar` (top bar), `tabs`, `saved`, `bUndo`/`bRedo`, `bDocx`, `bExport`/`expMenu`, `seg` (phone edit/preview switch), `rail`, `chips`, `editor`, `pvScroll`/`doc`/`pvMeta`, `mbar` (phone bottom bar: `mUndo`, `mRedo`, `mDocx`), `modalRoot`, `toastUndo`, `armLive`, `floorEd`, `saveBanner`.
   - Preview: `pv-cover`, `pv-toc`, `pv-<si>` (the site's first page), `pv-<si>-<sectionId>` (each section's `<h5>`; it does not exist for `racks` when a site has no racks), `pv-<si>-racks-rack-<j>` (rack pages).
   - `<si>` is the site index.
 - **Rendering**: string templates and `innerHTML`.
-  - `renderTabs()` draws the site tabs.
-  - `renderEditor()` draws the left-hand form.
-  - `renderDoc()` draws the right-hand paper preview.
+  - `renderTabs()` draws the site tabs (top bar).
+  - `renderEditor()` draws the form, then the rail and chips. It keeps the window scroll position and the focused control (found again by `focusSel()`: `data-b` path, `data-act`/`data-confirm` + indexes, summary key) across the rebuild.
+  - `renderDoc()` draws the paper preview (keeps its scroll position).
   - `renderAll()` runs all three.
+  - `updateChrome()` refreshes summaries (`[data-sum]`), dots (`[data-dot]`), rail and chips in place. The typing path (`liveRefresh()`) uses it, plus `syncDevErr()` for the inline device errors, so typing and Tab never rebuild the form.
 - **Binding**: inputs carry `data-b="<path>"`, e.g. `sites.0.racks.1.devices.0.u`.
   - The delegated `input` handler on `#editor` calls `setP(S, path, value)`, then `save()`, then re-renders **only the preview**. This keeps focus in the form.
   - On `change`, selects and number inputs trigger a full `renderEditor()`, so derived chips and warnings update.
 - **Actions**: buttons carry `data-act="<name>"` plus `data-i` / `data-j` indexes. `act(a,i,j)` runs the `switch` in `doAct()` inside `mutate()` (one undo step), then `save(); renderAll()`. `doAct` returns `false` when it did nothing.
-- **Two-click deletes**:
-  - Buttons with `data-confirm` arm first ("Click again to delete") and reset after 3 s. Tab deletes (`data-tabx`) work the same way.
+- **Deletes (`armDelete(btn, run)`)**: every delete (site, rack, device, power source, cable type, floor item, site tab) is a button with `data-confirm="<action>"` (tab ×: `data-tabx`).
+  - The first click arms it (red, "คลิกอีกครั้งเพื่อลบ", announced in `#armLive`). The second click runs the action through `act()` and then calls `toastUndo("ลบ…แล้ว")` (`DEL_MSG`).
+  - Esc, a click elsewhere, losing focus or 3 s disarm it.
+  - Icon-only buttons carry class `ib` and show the label as a popover (`data-arm`), so rows never reflow. Text buttons swap their text and lock a min-width.
   - Never use `confirm()`, `alert()` or `prompt()`, because the artifact host blocks them.
-- **Floor-plan clicks**: a rack cell in the editor's floor SVG carries `data-tog="itemIndex:rackIndex"` and toggles `on` (install rack, drawn filled teal).
+- **UI state** (`UI`, key `KEY+'-ui'`): which cards are open, `UI.o[key]`, with keys `doc`, `site:<siteId>`, `sec:<siteId>:<sectionId>`, `rack:<rackId>`.
+  - It is separate from `S`: never in undo history, never exported.
+  - Defaults: cover closed, site and sections open, only the first rack open. A capture-phase `toggle` listener stores changes. `data-def` carries the default so the render itself stays quiet.
+  - New or duplicated racks open via `setOpen()` (inside `doAct`). Expand/Collapse all is `setAll()`.
+  - `S` is saved once at startup, so a fresh sample keeps its random ids (and so its UI keys) across reloads.
+- **Outline rail / chips / scroll sync**: `navKeys()` lists `doc`, `site`, `sec:<id>`, `rack:<j>`. `edId(key)` / `pvId(key)` map a key to the editor card and the preview element.
+  - `renderRail()` (≥1180px) and `renderChips()` (<1180px) draw links with a completeness dot and a warning badge for racks with `devErrors()`. `statusOf()`: required fields filled → full, some → part, none → empty. Racks use `rackStat()`.
+  - `goto(key)` opens the card, scrolls it under the sticky bars and scrolls the preview (`pvScrollTo`).
+  - `observeNav()` is an IntersectionObserver on a 2 px line below the sticky bars. The deepest card crossing it becomes `ACTIVE`, and once the user has scrolled (`spy`) the preview follows (`followPreview`). Focusing a field does the same.
+- **Layout vars**: `measure()` (ResizeObserver) writes `--bar-h`, `--seg-h`, `--chips-h` (measured heights) on `:root`. The sticky rail, preview and chips and `scroll-margin-top` use them, with no hard-coded toolbar pixels.
+  - Breakpoints: ≥1180px rail | form | preview; 980–1179px chips instead of the rail; <980px one column with the แก้ไข | ตัวอย่าง switch (`setView()`, `body[data-mv]`), the bottom bar (`#mbar`) and 40px tap targets.
+  - Print CSS forces the preview visible whatever the view.
+- **Toast**: one live region `#toastUndo` (`aria-live=polite`, bottom-left, above the phone bar). `toast(text)` is plain. `toastUndo(msg)` adds Undo and dismiss, and pauses on hover/focus.
+- **Modal**: `modal(title, body, btns)` / `closeModal()`. `role=dialog` + `aria-modal`, focus moves in, Tab is trapped, Esc and the backdrop close it, and focus returns to the trigger (the Export button when opened from the menu).
+  - Reset is two steps (`resetStep()`: choose, then Cancel / "บันทึก JSON ก่อน" / ยืนยันรีเซ็ต) and ends with `toastUndo`.
+- **Tabs**: `role=tablist/tab`, roving tabindex, Left/Right/Home/End select and focus. The × shows only on hover, focus or the active tab.
+- **Floor-plan cells**: a rack cell in the editor's floor SVG carries `data-tog="itemIndex:rackIndex"` and toggles `on` (install rack, filled teal plus a white check mark, in the editor SVG only; the preview SVG is unchanged).
+  - Named cells are `role=button`, `tabindex=0`, `aria-pressed`, with Enter/Space. `refreshFloor()` redraws the SVG and re-focuses the cell.
+- **Device table**: spreadsheet-like (`tr.dev` rows: name, U, H, delete). `devErrors(r)` gives per-row messages (out of range / overlap). The row gets `err`, and the U/H inputs get `aria-invalid` + `aria-describedby` pointing at the error row under it.
+  - "เพิ่มอุปกรณ์" defaults U to the free unit just above the highest device, else the first free U.
 
 ### Key functions
 
 | Function | Purpose |
 |---|---|
 | `sample()`, `blankSite(n)`, `blankRack()`, `cloneSite(s)` | Data factories (`cloneSite` makes fresh ids) |
-| `unitsOf(r)`, `uLabel(r)`, `rackWarnings(r)` | Derived "จำนวน Unit", "หมายเลข Unit" (e.g. `U 21`, `U 21–22`), overlap/out-of-range warnings |
+| `unitsOf(r)`, `uLabel(r)`, `devErrors(r)`, `rackStat(r)` | Derived "จำนวน Unit", "หมายเลข Unit" (e.g. `U 21`, `U 21–22`), per-device overlap/out-of-range errors, rack completeness |
 | `rackSVG(r)` | Rack elevation SVG: 8 px per U, numbered from the bottom, devices drawn as `#0E7C86` bars with white labels |
 | `floorSVG(f, interactive)` | Room plan SVG. `f.orient` `'h'` = rows run left→right and stack top→bottom; `'v'` = columns run top→bottom and sit side by side. Aisle labels (rotated in `'v'`), door trapezoid at the bottom (`left/center/right/none`) |
 | `migrate(o)`, `normSite(s)` | Schema upgrade and defensive defaults (see Architecture) |
 | `SECTIONS`, `secX()`, `pagePlan()` | Section registry and the shared TOC page plan |
 | `siteHTML(s, si)`, `docHTML()` | Paper preview: cover, TOC (page numbers from `pagePlan()`: cover 1, TOC 2, per site → 1 page for sections 1+2, 1 page per rack, 1 page for the diagram), then pages |
 | `mutate(fn)`, `undo()`, `redo()`, `toastUndo(msg)` | Undo history (see Architecture) |
+| `armDelete(btn,run)`, `act()`, `onAct()`, `delTab()`, `selectSite()` | Delete confirmation, undoable actions (+ focus/scroll follow-up), tabs |
+| `renderRail()`, `renderChips()`, `updateChrome()`, `goto()`, `observeNav()`, `setView()`, `measure()` | Outline/section navigation, scroll sync, layout vars |
+| `saveUI()`, `isOpen()`, `setOpen()` | Card open/closed UI state |
 | `putImg(dataUrl)`, `imgURL(ref)`, `diagImg(s)`, `internImages(o)`, `loadImages(o)`, `inlineImages(o)`, `gcImages()`, `exportJSON()` | IndexedDB image store |
 | `toMarkdown()` | Markdown export (tables, floor plan as text rows with `[x]` = install rack) |
 | `copyWord()` | Rasterises the preview SVGs to PNG and writes `text/html` to the clipboard (falls back to `execCommand('copy')`) |

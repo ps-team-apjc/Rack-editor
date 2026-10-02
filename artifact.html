@@ -3,106 +3,320 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Sarabun:wght@400;600;700&display=swap">
 <style>
-/* Layout: sticky toolbar, site tabs, then a two-pane workbench — form editor left, live paper document right (stacks on phones). */
+/* Layout — sticky top bar (brand, document name, site tabs, undo/redo, export), then outline rail | form | paper preview.
+   >=1180px three columns; 980-1179px section chips replace the rail; <980px one column with an edit/preview switch and a bottom bar.
+   Look: engineering tool. Graphite neutrals, one teal accent, 1px hairlines, no gradients/glass/card shadows (popovers and modals only). */
 :root{
-  --bg:#EDF2F3; --surface:#FFFFFF; --surface-2:#F5F8F9; --fg:#14262E; --muted:#58707A; --line:#D2DDE1;
-  --accent:#155E7E; --accent-fg:#FFFFFF; --accent-soft:#DCEBF1; --danger:#B3261E; --ok:#1E7A4C;
+  --bg:#F3F4F5; --surface:#FFFFFF; --surface-2:#F8F9FA; --hover:#EEF0F2; --fg:#1B1F23; --muted:#5C6870; --faint:#66707A; --line:#DADFE3; --line-strong:#C3CBD1; --field:#88939C;
+  --accent:#1A5E80; --accent-fg:#FFFFFF; --accent-text:#1A5E80; --accent-soft:#E3EEF3;
+  --danger:#B3261E; --danger-bg:#FCEDEC; --danger-fg:#FFFFFF; --warn:#8A5A00; --warn-bg:#FFF4D9; --ok:#1E7A4C;
+  --toast-bg:#1B1F23; --toast-fg:#F3F4F5; --toast-link:#8FD0EC;
+  --shadow-pop:0 6px 20px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.04);
   --paper:#FFFFFF; --ink:#1C1C1C; --doc-accent:#1A5E80; --doc-dev:#0E7C86; --doc-rule:#3A3A3A; --doc-grid:#E3E6E8;
   --ui:"IBM Plex Sans Thai",system-ui,"Segoe UI",Tahoma,sans-serif;
   --docf:"Sarabun","IBM Plex Sans Thai",Tahoma,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:5px; --bar-h:48px; --seg-h:0px; --chips-h:0px; color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0E181C; --surface:#152329; --surface-2:#1A2C33; --fg:#E1ECEF; --muted:#8EA6AE; --line:#29414B;
-  --accent:#62B4D4; --accent-fg:#06222D; --accent-soft:#1C3A47; --danger:#F08A80; --ok:#6BCB98; color-scheme:dark}}
+  --bg:#101315; --surface:#171B1E; --surface-2:#1C2125; --hover:#232A2F; --fg:#E6EAED; --muted:#99A5AD; --faint:#8A969E; --line:#2A3137; --line-strong:#3A444C; --field:#66727B;
+  --accent:#1A5E80; --accent-text:#7CC0E0; --accent-soft:#18303B;
+  --danger:#F28B82; --danger-bg:#331C1B; --danger-fg:#1A0B0A; --warn:#EAB45A; --warn-bg:#33290F; --ok:#6BCB98;
+  --toast-bg:#E6EAED; --toast-fg:#171B1E; --toast-link:#1A5E80;
+  --shadow-pop:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06); color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0E181C; --surface:#152329; --surface-2:#1A2C33; --fg:#E1ECEF; --muted:#8EA6AE; --line:#29414B;
-  --accent:#62B4D4; --accent-fg:#06222D; --accent-soft:#1C3A47; --danger:#F08A80; --ok:#6BCB98; color-scheme:dark}
+  --bg:#101315; --surface:#171B1E; --surface-2:#1C2125; --hover:#232A2F; --fg:#E6EAED; --muted:#99A5AD; --faint:#8A969E; --line:#2A3137; --line-strong:#3A444C; --field:#66727B;
+  --accent:#1A5E80; --accent-text:#7CC0E0; --accent-soft:#18303B;
+  --danger:#F28B82; --danger-bg:#331C1B; --danger-fg:#1A0B0A; --warn:#EAB45A; --warn-bg:#33290F; --ok:#6BCB98;
+  --toast-bg:#E6EAED; --toast-fg:#171B1E; --toast-link:#1A5E80;
+  --shadow-pop:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06); color-scheme:dark}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--ui);margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.6 var(--ui);font-variant-numeric:tabular-nums;margin:0}
 button,input,textarea,select{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-size:13px}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.sm{width:12px;height:12px}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+small{font-size:12px;font-weight:400;color:var(--muted)}
 
-.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
-.brand{display:flex;flex-direction:column;min-width:0}
-.brand b{font-size:15px;font-weight:600;letter-spacing:.01em}
-.brand small{color:var(--muted);font-size:12px}
-.bar .grow{flex:1}
-.actions{display:flex;flex-wrap:wrap;gap:6px}
-.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:6px;padding:6px 11px;cursor:pointer;font-size:13px;white-space:nowrap}
-.btn:hover{border-color:var(--accent)}
-.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-.btn.ghost{background:transparent}
-.btn.danger{color:var(--danger)}
-.btn.sm{padding:3px 8px;font-size:12px}
-.saved{font-size:12px;color:var(--muted)}
-
-.tabs{display:flex;gap:4px;padding:10px 16px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--bg)}
-.tab{border:1px solid var(--line);border-bottom:none;background:transparent;padding:7px 14px;border-radius:7px 7px 0 0;cursor:pointer;white-space:nowrap;color:var(--muted)}
-.tabw{display:flex;align-items:stretch;border:1px solid var(--line);border-bottom:none;border-radius:7px 7px 0 0;flex:none}
-.tabw .tab{border:none;border-radius:7px 0 0 7px;padding-right:6px}
-.tabw .tab:last-child{border-radius:7px 7px 0 0;padding-right:14px}
-.tabw[aria-selected="true"]{background:var(--surface);box-shadow:inset 0 3px 0 var(--accent)}
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--muted);white-space:nowrap}
+.brand .mark{width:20px;height:20px;border-radius:4px;background:var(--accent);display:grid;place-items:center;color:#fff}
+.brand .mark .ic{width:13px;height:13px;stroke-width:1.8}
+.sep-v{width:1px;height:20px;background:var(--line);flex:none}
+.docname{font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+.tabs{display:flex;align-items:stretch;align-self:stretch;min-width:0;margin-left:4px}
+.tablist{display:flex;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.tabw{display:flex;align-items:center;flex:none;border-bottom:2px solid transparent;position:relative}
+.tabw[data-sel="true"]{border-bottom-color:var(--accent-text)}
+.tabw:hover{background:var(--hover)}
+.tab{height:100%;min-height:46px;padding:0 6px 0 12px;border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px;white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
 .tab[aria-selected="true"]{color:var(--fg);font-weight:600}
-.tabx{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:0 10px 0 4px;font-size:15px;line-height:1;border-radius:0 7px 0 0}
-.tabx:hover{color:var(--danger)}
-.tabx.armed{color:var(--danger);font-size:12px;font-weight:600;padding:0 10px}
-.tab.add{border-style:dashed;color:var(--accent)}
+.tabx{display:grid;place-items:center;width:22px;height:22px;margin-right:6px;border:0;border-radius:4px;background:none;color:var(--muted);cursor:pointer;opacity:0;padding:0;font-size:12px;white-space:nowrap}
+.tabw:hover .tabx,.tabw:focus-within .tabx,.tabw[data-sel="true"] .tabx{opacity:1}
+.tabx:hover{color:var(--danger);background:var(--danger-bg)}
+.tabx.arm{width:auto;padding:0 8px;opacity:1;background:var(--danger);color:var(--danger-fg);font-weight:600}
+.tab-add{align-self:center;display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;flex:none}
+.tab-add:hover{background:var(--hover);color:var(--fg)}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.status i{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+.status.warn{color:var(--danger)}
+.status.warn i{background:var(--danger)}
 
-.work{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;padding:16px;align-items:start}
-@media (max-width:980px){.work{grid-template-columns:minmax(0,1fr)}}
-.editor{display:flex;flex-direction:column;gap:12px;min-width:0}
-.preview-wrap{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);max-height:calc(100vh - 90px);overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
-@media (max-width:980px){.preview-wrap{position:static;max-height:none}}
-.pv-head{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-bottom:12px}
-.pv-head span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
-
-details.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
-details.card>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:baseline}
-details.card>summary::-webkit-details-marker{display:none}
-details.card>summary .num{font-family:var(--mono);font-size:12px;color:var(--accent);min-width:1.4em}
-details.card>summary h3{margin:0;font-size:14px;font-weight:600}
-details.card>summary .hint{margin-left:auto;font-size:12px;color:var(--muted)}
-details.card[open]>summary{border-bottom:1px solid var(--line)}
-.body{padding:14px;display:flex;flex-direction:column;gap:12px}
-.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 12px}
-label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
-label.f input,label.f textarea,label.f select{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:7px 9px;color:var(--fg);font-size:14px;width:100%}
-label.f textarea{resize:vertical;min-height:56px}
-.sub{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
-.sub-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.sub-h b{font-weight:600}
-.sub-h .grow{flex:1}
-.row-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
-.row-line.dev{grid-template-columns:minmax(0,2.4fr) minmax(56px,.6fr) minmax(56px,.6fr) auto}
-.row-line.cab{grid-template-columns:minmax(0,1fr) minmax(0,1.8fr) auto;align-items:start}
-@media (max-width:520px){.row-line.cab{grid-template-columns:minmax(0,1fr) auto}.row-line.cab>:nth-child(2){grid-column:1/-1;grid-row:2}}
-.x{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:6px;font-size:16px;line-height:1}
-.x:hover{color:var(--danger);background:var(--surface)}
-.note{font-size:12px;color:var(--muted);margin:0}
-.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)}
-.warn{color:var(--danger);font-size:12px}
-.floor-edit{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
-.floor-edit .svgbox{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto;max-width:100%}
-.floor-items{flex:1;min-width:240px;display:flex;flex-direction:column;gap:8px}
-.fi{display:grid;grid-template-columns:118px minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
-.fi select,.fi input{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:13px;width:100%;min-width:0}
-.imgdrop{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--muted);font-size:13px}
-.imgdrop img{max-height:180px;margin:0 auto 8px;display:block;border-radius:4px}
-
-/* modal */
-.modal{position:fixed;inset:0;background:rgba(5,15,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
-.modal-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column}
-.modal-card header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
-.modal-card header h3{margin:0;font-size:15px;flex:1}
-.modal-card .mb{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:10px}
-.modal-card textarea{width:100%;min-height:320px;font:12px/1.5 var(--mono);background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px}
-.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:60}
-.toast-undo{display:flex;gap:12px;align-items:center}
-.toast-undo .btn{background:transparent;color:inherit;border-color:currentColor}
-.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:10px 16px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--danger);border-left-width:5px;border-radius:8px;color:var(--fg);font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--field);background:var(--surface);border-radius:var(--r);cursor:pointer;font-size:13px;white-space:nowrap;text-decoration:none}
+.btn:hover{background:var(--hover)}
+.btn[disabled]{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn.primary:hover{filter:brightness(1.15);background:var(--accent)}
+.btn.icon{width:28px;padding:0;color:var(--muted);border-color:transparent;background:transparent}
+.btn.icon:hover{background:var(--hover);color:var(--fg)}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.btn.icon.sm{width:24px;padding:0}
+.btn.del{color:var(--muted)}
+.btn.del:hover{color:var(--danger);background:var(--danger-bg)}
+.btn.arm,.btn.arm:hover{background:var(--danger);border-color:var(--danger);color:var(--danger-fg);font-weight:600}
+.ib{position:relative}
+.ib.arm::after{content:attr(data-arm);position:absolute;right:calc(100% + 6px);top:50%;transform:translateY(-50%);background:var(--danger);color:var(--danger-fg);font-size:12px;font-weight:600;white-space:nowrap;padding:3px 8px;border-radius:var(--r);z-index:6;pointer-events:none}
+.filebtn{position:relative;cursor:pointer}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px;inset:0}
+.filebtn:focus-within{outline:2px solid var(--accent-text);outline-offset:1px}
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:34px;width:290px;max-width:calc(100vw - 16px);padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);box-shadow:var(--shadow-pop);z-index:40}
+.menu[hidden]{display:none}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 8px;border:0;background:none;border-radius:4px;cursor:pointer;text-align:left;font-size:13px;white-space:nowrap}
+.menu button:hover,.menu button:focus-visible{background:var(--hover)}
+.menu button:focus-visible{outline-offset:-2px}
+.menu button .k{margin-left:auto;color:var(--muted);font-size:12px}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.menu .danger,.menu .danger .k{color:var(--danger)}
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:10px 16px 0;padding:10px 14px;background:var(--surface);border:1px solid var(--danger);border-left-width:5px;border-radius:var(--r);color:var(--fg);font-size:13px}
 .banner b{color:var(--danger)}
 
+/* ---------- mobile switch, chips, bottom bar ---------- */
+.seg{display:none;position:sticky;top:var(--bar-h);z-index:25;grid-template-columns:1fr 1fr;padding:8px 12px;background:var(--bg)}
+.seg-in{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--field);border-radius:var(--r);overflow:hidden;background:var(--surface);grid-column:1/-1}
+.seg button{height:34px;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:13px}
+.seg button+button{border-left:1px solid var(--field)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.chips{display:none;position:sticky;top:calc(var(--bar-h) + var(--seg-h));z-index:20;gap:6px;padding:8px 16px;overflow-x:auto;background:var(--bg);border-bottom:1px solid var(--line);scrollbar-width:thin}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid var(--field);border-radius:15px;background:var(--surface);font-size:13px;white-space:nowrap;color:var(--fg);text-decoration:none;flex:none}
+.chip[aria-current="true"]{background:var(--accent-soft);color:var(--accent-text);border-color:var(--accent-text);font-weight:600}
+.mbar{display:none;position:fixed;left:0;right:0;bottom:0;z-index:35;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line)}
+.mbar .btn{flex:1;height:40px}
+.mbar .btn.icon{flex:none;width:40px;border-color:var(--field);color:var(--fg)}
+.mbar .btn.primary{flex:2}
+
+/* ---------- workbench ---------- */
+.work{display:grid;grid-template-columns:220px minmax(420px,600px) minmax(0,1fr);align-items:start}
+.rail{position:sticky;top:var(--bar-h);height:calc(100vh - var(--bar-h));height:calc(100dvh - var(--bar-h));overflow:auto;border-right:1px solid var(--line);background:var(--surface);padding:12px 8px}
+.rail h6{margin:0 8px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.rail h6 span{text-transform:none;letter-spacing:0;font-weight:400}
+.rail .site{margin:0 8px 10px;font-size:12px;color:var(--muted)}
+.rail .site b{display:block;color:var(--fg);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav{list-style:none;margin:0;padding:0}
+.nav a{display:flex;align-items:center;gap:8px;min-height:30px;padding:3px 8px;border-radius:var(--r);color:var(--fg);text-decoration:none;font-size:13px}
+.nav a:hover{background:var(--hover)}
+.nav a[aria-current="true"]{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.nav .tx{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.nav .tx small{font-size:11px;color:var(--muted)}
+.nav a[aria-current="true"] .tx small{color:var(--accent-text)}
+.nav .n{width:14px;color:var(--faint);font:12px var(--mono);text-align:right;display:grid;place-items:center;flex:none}
+.nav .sub{padding-left:22px;margin:2px 0 4px}
+.nav .sub a{font-size:13px}
+.nav .rn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.nav .add{color:var(--accent-text)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;margin-left:auto;border:1.5px solid var(--faint)}
+.dot.full{background:var(--ok);border-color:var(--ok)}
+.dot.part{border-color:var(--warn);background:var(--warn);box-shadow:inset 0 0 0 1.5px var(--surface)}
+.badge{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:9px;font-size:11px;font-weight:600;background:var(--warn-bg);color:var(--warn);margin-left:auto;flex:none}
+.badge.err{background:var(--danger-bg);color:var(--danger)}
+.legend{margin:14px 8px 0;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:grid;gap:4px}
+.legend>span{display:flex;align-items:center;gap:8px}
+.legend .dot{margin:0}
+
+.editor-col{min-width:0;border-right:1px solid var(--line)}
+.editor{padding:12px 16px calc(100vh - var(--bar-h) - 200px);display:flex;flex-direction:column;gap:8px;min-width:0}
+.form-tools{display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:12px;color:var(--muted)}
+.form-tools b{color:var(--fg);font-weight:600}
+.form-tools .sp{flex:1}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:6px;scroll-margin-top:calc(var(--bar-h) + var(--seg-h) + var(--chips-h) + 8px)}
+.sec[open]{border-color:var(--line-strong)}
+.sec>summary,.rack>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 10px;min-height:38px;border-radius:6px}
+.sec>summary::-webkit-details-marker,.rack>summary::-webkit-details-marker{display:none}
+.sec>summary:hover,.rack>summary:hover{background:var(--hover)}
+.chev{color:var(--muted);transition:transform .1s}
+details[open]>summary>.chev{transform:rotate(90deg)}
+.sec>summary .t{font-weight:600;min-width:0;white-space:nowrap}
+.sec>summary .t small{margin-left:6px}
+.sec>summary .num{font-family:var(--mono);font-size:12px;color:var(--faint);margin-right:6px;font-weight:400}
+.sec>summary .sum{margin-left:auto;color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.sec>summary .dot{margin-left:0}
+.err-t{color:var(--danger);font-weight:600}
+.sec-b{border-top:1px solid var(--line);padding:12px;display:grid;gap:14px;background:var(--surface-2);border-radius:0 0 6px 6px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 12px}
+.row3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 96px;gap:10px}
+.fld{display:grid;gap:4px;min-width:0;align-content:start}
+.fld>.lbl,label.fld>.lbl{font-size:12.5px;font-weight:600}
+.lbl small{margin-left:6px}
+input[type=text],input[type=number],input:not([type]),textarea,select{width:100%;height:30px;padding:3px 8px;border:1px solid var(--field);border-radius:var(--r);background:var(--surface);min-width:0}
+textarea{height:auto;min-height:74px;resize:vertical;line-height:1.55;padding:6px 8px}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input:hover,textarea:hover,select:hover{border-color:var(--faint)}
+input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--accent-text);outline-offset:-1px;border-color:var(--accent-text)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+.hint,.note{font-size:12px;color:var(--muted);margin:0}
+.note code{font-family:var(--mono)}
+.chip-s{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent-text)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.acts .sp{flex:1}
+
+.rack{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);scroll-margin-top:calc(var(--bar-h) + var(--seg-h) + var(--chips-h) + 8px)}
+.rack[open]{border-color:var(--accent-text)}
+.rack>summary{padding:5px 10px;min-height:40px;flex-wrap:wrap;row-gap:0}
+.rk-sum{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.rk-sum .name{font-weight:600}
+.sumline{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sumline .d{color:var(--faint)}
+.rack>summary .dot{margin-left:auto}
+.rack-b{border-top:1px solid var(--line);padding:12px;display:grid;gap:14px}
+.foot-actions{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);padding-top:10px;flex-wrap:wrap}
+.foot-actions .sp{flex:1}
+
+.tblwrap{border:1px solid var(--field);border-radius:var(--r);overflow:hidden}
+table.grid{width:100%;border-collapse:separate;border-spacing:0}
+.grid th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--field)}
+.grid th small{margin-left:4px}
+.grid td{padding:0;border-bottom:1px solid var(--line);vertical-align:top;background:var(--surface)}
+.grid td+td,.grid th+th{border-left:1px solid var(--line)}
+.grid td input{border:0;border-radius:0;height:32px;background:transparent}
+.grid td input:focus-visible{outline-offset:-2px}
+.grid .u,.grid .h{width:84px}
+.grid .a{width:60px}
+.grid td.act{text-align:center;vertical-align:middle}
+.grid td.act .btn{margin:3px 0}
+.grid tr.err td{background:var(--danger-bg)}
+.grid tr.err td input[aria-invalid="true"]{box-shadow:inset 0 0 0 1px var(--danger)}
+.grid tr.errmsg td{padding:3px 8px 5px;font-size:12px;color:var(--danger);background:var(--danger-bg);border-left:0}
+.grid tr.errmsg[hidden]{display:none}
+.grid tr:last-child td{border-bottom:0}
+.grid tr.errmsg .ic{vertical-align:-2px;margin-right:6px}
+.addrow{display:flex;align-items:center;gap:6px;width:100%;height:32px;padding:0 8px;background:var(--surface-2);border:0;border-top:1px solid var(--line);color:var(--accent-text);cursor:pointer;font-size:13px;font-weight:600}
+.addrow:hover{background:var(--hover)}
+.addrow:focus-visible{outline-offset:-2px}
+.plist{display:grid;gap:6px}
+.prow{display:grid;grid-template-columns:22px minmax(0,1fr) 28px;gap:6px;align-items:center}
+.prow .i{font:12px var(--mono);color:var(--muted);text-align:right}
+.cable{border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);padding:10px;display:grid;gap:8px}
+.cable-h{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:8px;align-items:center}
+
+.floor-opts{display:flex;gap:14px;flex-wrap:wrap}
+.inl{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+.inl select{width:auto;min-width:150px}
+.inl small{margin-left:6px}
+.floor-edit{display:grid;gap:12px;justify-items:start}
+.floor-edit .svgbox{background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r);padding:8px;overflow:auto;max-width:100%}
+.svgbox g[role="button"]{cursor:pointer;outline:none}
+.svgbox g[role="button"]:focus-visible>rect{stroke:#1A5E80;stroke-width:3}
+.floor-items{width:100%;min-width:0;display:flex;flex-direction:column;gap:8px}
+.fi{display:grid;grid-template-columns:128px minmax(0,1fr) auto;gap:6px;align-items:center}
+.fi .mv{display:flex;align-items:center}
+.flegend{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+.flegend span{display:inline-flex;align-items:center;gap:6px}
+kbd{display:inline-block;border:1px solid var(--field);border-bottom-width:2px;border-radius:3px;padding:0 4px;font:11px var(--mono);color:var(--muted)}
+.imgdrop{border:1.5px dashed var(--field);border-radius:var(--r);padding:14px;text-align:center;color:var(--muted);font-size:13px;display:grid;gap:8px;justify-items:center;background:var(--surface)}
+.imgdrop img{max-height:180px;max-width:100%;display:block;border-radius:4px}
+
+/* ---------- preview pane ---------- */
+.preview-wrap{position:sticky;top:var(--bar-h);height:calc(100vh - var(--bar-h));height:calc(100dvh - var(--bar-h));display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.prev-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12px;color:var(--muted);min-height:36px}
+.prev-bar b{font-weight:600;color:var(--fg);font-size:13px}
+.prev-bar .follow{color:var(--faint)}
+.prev-bar #pvMeta{margin-left:auto;font-family:var(--mono)}
+.prev-scroll{flex:1;overflow:auto;padding:20px}
+
+/* ---------- modal, toast ---------- */
+.modal{position:fixed;inset:0;background:rgba(5,15,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal-card{background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;box-shadow:var(--shadow-pop);max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column}
+.modal-card header{padding:10px 12px 10px 16px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.modal-card header h3{margin:0;font-size:15px;flex:1}
+.modal-card .mb{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.modal-card textarea{width:100%;min-height:320px;font:12px/1.5 var(--mono);background:var(--surface-2);color:var(--fg)}
+.modal-card p{margin:0}
+.toast-host{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;max-width:calc(100vw - 24px)}
+.toast{display:flex;align-items:center;gap:10px;background:var(--toast-bg);color:var(--toast-fg);border-radius:var(--r);padding:8px 8px 8px 14px;box-shadow:var(--shadow-pop);font-size:13px}
+.toast .t-ic{opacity:.8}
+.toast .sepd{opacity:.5}
+.tbtn{border:0;background:none;color:var(--toast-link);font-weight:600;cursor:pointer;padding:2px 8px;border-radius:4px;font-size:13px;min-height:24px}
+.tbtn:hover{text-decoration:underline}
+.tbtn.close{color:inherit;opacity:.7;padding:4px;display:grid;place-items:center}
+.toast :focus-visible{outline-color:currentColor}
+
+/* ---------- breakpoints ---------- */
+@media (max-width:1279px){.brand-t,.sep-v.hide-s{display:none}.docname{max-width:140px}}
+@media (max-width:1179px){
+  .work{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .rail{display:none}
+  .chips{display:flex}
+  .bar .status span{display:none}
+}
+@media (max-width:979px){
+  .bar{flex-wrap:wrap;gap:0 8px;padding:0 8px}
+  .bar .tabs{order:10;flex:1 0 100%;margin:0 -8px;padding:0 8px;border-top:1px solid var(--line);height:42px;align-self:auto}
+  .bar .spacer{flex:1}
+  .bar #bDocx,.bar .sep-v,.bar #bUndo,.bar #bRedo{display:none}
+  .bar .status span{display:inline;font-size:11px}
+  .bar .btn.icon{width:40px;height:40px}
+  .bar #bExport{width:40px;padding:0}
+  .bar #bExport .lbl{display:none}
+  .docname{max-width:none;flex:0 1 auto;min-width:0}
+  .bar .brand{order:0}
+  .seg{display:grid}
+  .seg button{height:40px}
+  .work{grid-template-columns:minmax(0,1fr)}
+  .editor-col{border-right:0}
+  .editor{padding-bottom:96px}
+  .preview-wrap{position:static;height:auto}
+  .prev-scroll{overflow:visible;padding:12px 12px 96px}
+  body[data-mv="edit"] .preview-wrap{display:none}
+  body[data-mv="preview"] .editor-col{display:none}
+  body[data-mv="preview"] .chips{display:none}
+  .mbar{display:flex}
+  .toast-host{bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  .btn,.chip,.tab,.tab-add{min-height:40px}
+  .btn.icon.sm{width:40px;height:40px}
+  .btn.sm{height:36px}
+  .chip{height:40px}
+  .tab-add{width:40px;height:40px}
+  .tabx{width:34px;height:34px;opacity:0}
+  .tabw[data-sel="true"] .tabx{opacity:1}
+  .tabw:hover .tabx{opacity:0}
+  .tabw[data-sel="true"]:hover .tabx{opacity:1}
+  input[type=text],input[type=number],input:not([type]),select{height:40px}
+  .grid td input{height:40px}
+  .grid td.act .btn{margin:0}
+  .prow{grid-template-columns:22px minmax(0,1fr) 40px}
+  .cable-h{grid-template-columns:minmax(0,1fr) 40px}
+  .sec>summary,.rack>summary{min-height:44px}
+  .grid .u,.grid .h{width:64px}
+  .grid .a{width:44px}
+  .menu button{height:44px}
+  .sec>summary .sum{display:none}
+  .sec>summary .dot{margin-left:auto}
+  .sec>summary .t small{display:block;margin:0;line-height:1.2}
+}
+@media (max-width:520px){
+  .row3{grid-template-columns:minmax(0,1fr) 96px}
+  .row3>:first-child{grid-column:1/-1}
+  .fi{grid-template-columns:minmax(0,1fr) auto}
+  .fi>select{grid-column:1/-1}
+  .editor{padding-left:12px;padding-right:12px}
+  .sec-b,.rack-b{padding:10px}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+}
 /* ---------- paper document (always print-white, like the Word file) ---------- */
 .doc{display:flex;flex-direction:column;gap:16px;align-items:center}
 .page{background:var(--paper);color:var(--ink);width:100%;max-width:640px;aspect-ratio:auto;min-height:420px;padding:28px 34px 34px;box-shadow:0 1px 3px rgba(0,0,0,.12),0 6px 20px rgba(0,0,0,.06);font:12.5px/1.55 var(--docf);position:relative}
@@ -136,28 +350,77 @@ table.t td .ln{display:block}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
-<header class="bar">
-  <div class="brand"><b>Rack Site Survey Editor</b><small id="docName">Site Survey</small></div>
-  <div class="grow"></div>
-  <span class="saved" id="saved">Draft saved in this browser</span>
-  <div class="actions">
-    <button class="btn primary" id="bDocx">Download Word (.docx)</button>
-    <button class="btn" id="bDl">Download JSON</button>
-    <button class="btn" id="bMd">Copy Markdown</button>
-    <button class="btn" id="bWord">Copy for Word</button>
-    <button class="btn" id="bJson">Save / load JSON</button>
-    <button class="btn ghost" id="bReset">Reset…</button>
+
+<svg class="sprite" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 3 2.5 6l3 3"/><path d="M2.5 6H9a4.5 4.5 0 0 1 0 9H6"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 16 16"><path d="M10.5 3l3 3-3 3"/><path d="M13.5 6H7a4.5 4.5 0 0 0 0 9h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.6 8.5h6.8l.6-8.5M6.5 7v4M9.5 7v4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+  <symbol id="i-print" viewBox="0 0 16 16"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2v-5h11v5h-2M4.5 9.5h7v4h-7z"/></symbol>
+  <symbol id="i-md" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1"/><path d="M4 10.5v-5l2 2.5 2-2.5v5M11 6v4.5M9.5 9l1.5 1.5L12.5 9"/></symbol>
+  <symbol id="i-word" viewBox="0 0 16 16"><path d="M9.5 1.5h-5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-8z"/><path d="M9.5 1.5v4h4M5.5 8.5l1 3 1.5-3 1.5 3 1-3"/></symbol>
+  <symbol id="i-save" viewBox="0 0 16 16"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/></symbol>
+  <symbol id="i-load" viewBox="0 0 16 16"><path d="M8 11V3M4.5 6 8 2.5 11.5 6M2.5 13.5h11"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 16 16"><path d="M9.5 1.5h-5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-8zM9.5 1.5v4h4"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 16 16"><path d="M2.5 13.5l.7-3L11 2.7a1.2 1.2 0 0 1 1.7 0l.6.6a1.2 1.2 0 0 1 0 1.7L5.5 12.8z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2 1.8 13h12.4zM8 6.5v3M8 11.2v.1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5"/></symbol>
+  <symbol id="i-rack" viewBox="0 0 16 16"><rect x="3" y="1.5" width="10" height="13" rx="1"/><path d="M3 5.5h10M3 9.5h10M5.5 3.5h.01M5.5 7.5h.01M5.5 11.5h.01"/></symbol>
+</svg>
+
+<header class="bar" id="bar">
+  <div class="brand"><span class="mark"><svg class="ic" aria-hidden="true"><use href="#i-rack"/></svg></span><span class="brand-t">Rack Survey</span></div>
+  <span class="sep-v hide-s"></span>
+  <span class="docname" id="docName" title="ชื่อเอกสาร · Document title">Site Survey</span>
+  <div class="tabs" id="tabs"></div>
+  <span class="spacer"></span>
+  <span class="status" id="saved" role="status"><i></i><span>บันทึกในเบราว์เซอร์นี้</span></span>
+  <span class="sep-v"></span>
+  <button class="btn icon" id="bUndo" type="button" aria-label="เลิกทำ Undo (Ctrl+Z)" title="เลิกทำ · Undo (Ctrl+Z)" disabled><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+  <button class="btn icon" id="bRedo" type="button" aria-label="ทำซ้ำ Redo (Ctrl+Y)" title="ทำซ้ำ · Redo (Ctrl+Y)" disabled><svg class="ic" aria-hidden="true"><use href="#i-redo"/></svg></button>
+  <button class="btn primary js-docx" id="bDocx" type="button" title="Download Word (.docx)"><svg class="ic" aria-hidden="true"><use href="#i-save"/></svg><span class="lbl">ดาวน์โหลด .docx</span></button>
+  <div class="menu-wrap">
+    <button class="btn" id="bExport" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="expMenu" aria-label="ส่งออก Export" title="ส่งออก · Export"><span class="lbl">ส่งออก</span><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></button>
+    <div class="menu" id="expMenu" role="menu" aria-label="ส่งออก Export" hidden>
+      <button type="button" role="menuitem" id="bMd"><svg class="ic" aria-hidden="true"><use href="#i-md"/></svg>Markdown<span class="k">Copy</span></button>
+      <button type="button" role="menuitem" id="bWord"><svg class="ic" aria-hidden="true"><use href="#i-word"/></svg>คัดลอกไป Word<span class="k">Copy for Word</span></button>
+      <hr role="separator">
+      <button type="button" role="menuitem" id="bDl"><svg class="ic" aria-hidden="true"><use href="#i-save"/></svg>บันทึก JSON<span class="k">Save JSON</span></button>
+      <button type="button" role="menuitem" id="bJson"><svg class="ic" aria-hidden="true"><use href="#i-load"/></svg>โหลด JSON<span class="k">Load JSON</span></button>
+      <hr role="separator">
+      <button type="button" role="menuitem" class="danger" id="bReset"><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>รีเซ็ตข้อมูลทั้งหมด…<span class="k">Reset</span></button>
+    </div>
   </div>
 </header>
-<nav class="tabs" id="tabs" role="tablist" aria-label="Sites"></nav>
-<main class="work">
-  <section class="editor" id="editor" aria-label="Editor"></section>
-  <section class="preview-wrap" aria-label="Document preview">
-    <div class="pv-head"><span>Document preview</span><span id="pvMeta"></span></div>
-    <div class="doc" id="doc"></div>
+<div class="seg" id="seg"><div class="seg-in" role="group" aria-label="มุมมอง View">
+  <button type="button" data-mv="edit" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg>แก้ไข</button>
+  <button type="button" data-mv="preview" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg>ตัวอย่าง</button>
+</div></div>
+<main class="work" id="work">
+  <nav class="rail" id="rail" aria-label="โครงร่างเอกสาร Outline"></nav>
+  <div class="editor-col">
+    <nav class="chips" id="chips" aria-label="ส่วนของเอกสาร Sections"></nav>
+    <section class="editor" id="editor" role="tabpanel" aria-label="แก้ไข Editor"></section>
+  </div>
+  <section class="preview-wrap" aria-label="ตัวอย่างเอกสาร Document preview">
+    <div class="prev-bar"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg><b>ตัวอย่างเอกสาร</b><span>Preview</span><span class="follow">· ตามส่วนที่แก้ไข</span><span id="pvMeta"></span></div>
+    <div class="prev-scroll" id="pvScroll"><div class="doc" id="doc"></div></div>
   </section>
 </main>
+<div class="mbar" id="mbar">
+  <button class="btn icon" id="mUndo" type="button" aria-label="เลิกทำ Undo" title="เลิกทำ · Undo" disabled><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+  <button class="btn icon" id="mRedo" type="button" aria-label="ทำซ้ำ Redo" title="ทำซ้ำ · Redo" disabled><svg class="ic" aria-hidden="true"><use href="#i-redo"/></svg></button>
+  <button class="btn primary js-docx" id="mDocx" type="button" title="Download Word (.docx)"><svg class="ic" aria-hidden="true"><use href="#i-save"/></svg><span class="lbl">ดาวน์โหลด .docx</span></button>
+</div>
 <div id="modalRoot"></div>
+<div class="sr" id="armLive" role="status" aria-live="polite"></div>
 
 <script>
 (function(){
@@ -305,17 +568,31 @@ let S;
 try{const raw=localStorage.getItem(KEY);S=raw?migrate(JSON.parse(raw)):null}catch(e){S=null}
 if(!S||!S.sites.length)S=sample();
 
+/* ---------- UI state: which cards are open. Kept apart from S, so it is never in undo history or the exported JSON ----------
+   Keys: 'doc', 'site:<siteId>', 'sec:<siteId>:<sectionId>', 'rack:<rackId>'. Missing key = the card's default. */
+const UIKEY=KEY+'-ui';
+let UI={o:{}};
+try{const u=JSON.parse(localStorage.getItem(UIKEY)||'null');if(u&&u.o&&typeof u.o==='object'&&!Array.isArray(u.o))UI.o=u.o}catch(e){}
+let uiT;
+function saveUI(){clearTimeout(uiT);uiT=setTimeout(()=>{
+  const ks=Object.keys(UI.o);if(ks.length>300)ks.slice(0,ks.length-300).forEach(k=>delete UI.o[k]);
+  try{localStorage.setItem(UIKEY,JSON.stringify(UI))}catch(e){}},300)}
+const isOpen=(k,def)=>k in UI.o?!!UI.o[k]:!!def;
+const setOpen=(k,v)=>{UI.o[k]=!!v;saveUI()};
+const ic=(n,c)=>`<svg class="ic${c?' '+c:''}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+
 let saveT;
+const hhmm=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+function setSaved(ok,txt){const el=document.getElementById('saved');el.className='status'+(ok?'':' warn');el.innerHTML='<i></i><span></span>';el.lastChild.textContent=txt;el.title=txt}
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
-  const el=document.getElementById('saved');
-  try{localStorage.setItem(KEY,JSON.stringify(S));el.textContent='Draft saved in this browser';el.className='saved';saveBanner(false)}
-  catch(e){el.textContent='Not saved here — use Save / load JSON';el.className='saved warn';
+  try{localStorage.setItem(KEY,JSON.stringify(S));setSaved(true,'บันทึกแล้ว '+hhmm());saveBanner(false)}
+  catch(e){setSaved(false,'บันทึกไม่ได้ — ใช้ บันทึก/โหลด JSON');
     if(e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22||e.code===1014))saveBanner(true)}
 },300)}
 function saveBanner(on){let b=document.getElementById('saveBanner');
   if(!on){if(b)b.remove();return}if(b)return;
   b=document.createElement('div');b.id='saveBanner';b.className='banner';b.setAttribute('role','alert');
-  b.innerHTML=`<span><b>Changes are not being saved.</b> This draft is too large for this browser's storage. Download a JSON copy to keep your work.</span><button class="btn sm primary" type="button">Download JSON</button>`;
+  b.innerHTML=`<span><b>ไม่ได้บันทึกการเปลี่ยนแปลง</b> ฉบับร่างนี้ใหญ่เกินพื้นที่เก็บข้อมูลของเบราว์เซอร์ กรุณาดาวน์โหลดสำเนา JSON เพื่อเก็บงานไว้</span><button class="btn sm primary" type="button">ดาวน์โหลด JSON</button>`;
   b.querySelector('button').onclick=()=>document.getElementById('bDl').click();
   document.querySelector('.bar').after(b)}
 const site=()=>S.sites[S.cur];
@@ -332,7 +609,7 @@ function mutate(fn){commitEdit();const b=snap();const r=fn();if(snap()!==b)pushU
 function restore(json){S=migrate(JSON.parse(json));save();renderAll();loadImages(S).then(n=>{if(n)renderAll()});histUI()}
 function undo(){commitEdit();if(!UNDO.length)return false;REDO.push(snap());restore(UNDO.pop());return true}
 function redo(){commitEdit();if(!REDO.length)return false;UNDO.push(snap());if(UNDO.length>UMAX)UNDO.shift();restore(REDO.pop());return true}
-function histUI(){const u=document.getElementById('bUndo'),r=document.getElementById('bRedo');if(u)u.disabled=!UNDO.length;if(r)r.disabled=!REDO.length}
+function histUI(){[['bUndo','mUndo',UNDO],['bRedo','mRedo',REDO]].forEach(([a,b,st])=>[a,b].forEach(i=>{const e=document.getElementById(i);if(e)e.disabled=!st.length}))}
 
 /* ---------- path helpers for bound inputs ---------- */
 function getP(o,p){return p.split('.').reduce((a,k)=>a==null?a:a[k],o)}
@@ -341,13 +618,20 @@ function setP(o,p,v){const ks=p.split('.');const last=ks.pop();const t=ks.reduce
 /* ---------- derived ---------- */
 function unitsOf(r){return r.devices.reduce((a,d)=>a+(+d.h||0),0)}
 function uLabel(r){return r.devices.filter(d=>d.u).map(d=>(+d.h>1)?`U ${d.u}–${+d.u+ +d.h-1}`:`U ${d.u}`).join(', ')}
-function rackWarnings(r){
-  const w=[],occ={};
-  r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(!u)return;
-    if(u<1||u+h-1>r.size)w.push(`${d.name||'Device'} is outside 1–${r.size}U`);
-    for(let i=u;i<u+h;i++){if(occ[i])w.push(`U ${i} is used by both ${occ[i]} and ${d.name||'device'}`);occ[i]=d.name||'device'}});
-  return [...new Set(w)];
-}
+/* devErrors(r): {deviceIndex: message} for devices outside 1–size U or overlapping an earlier device (shown inline under the row). */
+function devErrors(r){const e={},occ={};
+  r.devices.forEach((d,i)=>{const u=+d.u,h=+d.h||1;if(!u)return;
+    if(u<1||u+h-1>r.size)e[i]=`เกินขนาดตู้ — ใช้ได้เฉพาะ U 1–${r.size}`;
+    for(let k=u;k<u+h;k++){
+      if(occ[k]!==undefined){if(!e[i])e[i]=`ทับซ้อนกับ ${r.devices[occ[k]].name||'อุปกรณ์อื่น'} ที่ U ${k} — เลื่อนตำแหน่งหรือลดความสูง`}
+      else occ[k]=i}});
+  return e}
+/* Completeness for the outline dots: 'full' | 'part' | 'empty'. Simple "required fields filled" rules (UI only, no effect on output). */
+const filled=v=>String(v??'').trim()!=='';
+const lvl=(n,total)=>n<=0?'empty':n>=total?'full':'part';
+function rackStat(r){
+  const n=[filled(r.device),filled(r.rack)&&r.rack.trim()!=='Rack',r.devices.some(d=>filled(d.name)&&+d.u>0),r.power.some(filled),r.cables.some(c=>filled(c.text))].filter(Boolean).length;
+  const st=lvl(n,5);return st==='full'&&Object.keys(devErrors(r)).length?'part':st}
 
 /* ---------- SVG drawings ---------- */
 function rackSVG(r){
@@ -383,9 +667,10 @@ function floorSVG(f,interactive){
       const n=p.it.racks.length,len=n*(vert?CH:CW),start=(crossTot-len)/2;
       p.it.racks.forEach((rk,j)=>{
         const x=vert?p.at:start+j*CW, y=vert?start+j*CH:p.at, w=vert?CW:CW, h=vert?CH:CH;
-        const fill=rk.on?'#16607F':'#FFFFFF', tc='#1C1C1C';
-        s+=`<g ${interactive?`data-tog="${p.i}:${j}" style="cursor:pointer"`:''}><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="#555" stroke-width=".8"/>`;
+        const fill=rk.on?'#16607F':'#FFFFFF', tc=interactive&&rk.on?'#FFFFFF':'#1C1C1C', btn=interactive&&rk.n;
+        s+=`<g ${interactive?`data-tog="${p.i}:${j}" style="cursor:pointer"${btn?` role="button" tabindex="0" aria-pressed="${!!rk.on}" aria-label="ตู้ ${esc(rk.n)} ${rk.on?'ติดตั้ง':'ไม่ติดตั้ง'}"`:''}`:''}><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="#555" stroke-width=".8"/>`;
         if(rk.n)s+=`<text x="${x+w/2}" y="${vert?y+h/2+4:y+h-8}" font-size="${vert?9:10}" fill="${tc}" text-anchor="middle" pointer-events="none">${esc(rk.n)}</text>`;
+        if(btn&&rk.on)s+=`<path d="M${x+w-14} ${y+8} l3.5 3.5 l7 -8" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>`;  // install state is not colour-only (editor only)
         s+=`</g>`});
     }});
   // door
@@ -395,21 +680,27 @@ function floorSVG(f,interactive){
 }
 
 /* ---------- editor ---------- */
+/* F(label, path, opt): bound field with a Thai label and an optional muted English one. opt: en, area, rows, ph, num, max, mono. */
 const F=(label,path,opt={})=>{const v=getP(S,path)??'';
-  return `<label class="f">${esc(label)}${opt.area?`<textarea data-b="${path}" rows="${opt.rows||2}" placeholder="${esc(opt.ph||'')}">${esc(v)}</textarea>`:
-  `<input data-b="${path}" ${opt.num?'type="number" min="1"':''} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
+  const lb=`<span class="lbl">${esc(label)}${opt.en?`<small>${esc(opt.en)}</small>`:''}</span>`;
+  return `<label class="fld">${lb}${opt.area?`<textarea data-b="${path}" rows="${opt.rows||2}" placeholder="${esc(opt.ph||'')}">${esc(v)}</textarea>`:
+  `<input${opt.mono?' class="mono"':''} data-b="${path}" ${opt.num?`type="number" inputmode="numeric" min="1"${opt.max?` max="${opt.max}"`:''}`:'type="text"'} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
 
 /* ---------- section registry: one entry per numbered section of a site ----------
    Section number = position + 1. x = {n, t (title), id (preview anchor)}; c = DOCX helpers from buildDocx().
    page:false → doc() flows onto the site's current page; page:true → doc() returns its own .page divs and
-   pages(s) says how many (for the TOC). editor(s,P,si) returns the card body; ids: ed-<si>-<id>, pv-<si>-<id>. */
+   pages(s) says how many (for the TOC). editor(s,P,si) returns the card body; ids: ed-<si>-<id>, pv-<si>-<id>.
+   UI-only fields (never in the document output): label/en (Thai + English card/rail title), chip (short phone label),
+   done(s) → 'full'|'part'|'empty' (outline dot), sum(s) → one-line card summary (HTML). */
 const mdRow=(k,v)=>`| ${k} | ${String(v??'').replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
 const MDH='| หัวข้อ | รายละเอียด |\n|---|---|\n';
 const SECTIONS=[
-{id:'info',title:'ข้อมูลเกี่ยวกับการสำรวจพื้นที่',hint:'Survey info',page:false,
+{id:'info',title:'ข้อมูลเกี่ยวกับการสำรวจพื้นที่',label:'ข้อมูลการสำรวจ',en:'Survey info',chip:'สำรวจ',page:false,
+  done:s=>lvl(['agency','location','datetime','surveyors'].filter(k=>filled(s.info[k])).length,4),
+  sum:s=>{const n=s.info.surveyors.split('\n').filter(filled).length;return esc(s.info.agency||'ยังไม่ระบุหน่วยงาน')+(n?` · ${n} ผู้สำรวจ`:'')},
   editor:(s,P)=>`<div class="grid2">
-    ${F('ชื่อหน่วยงาน',P+'.info.agency')}${F('สถานที่/ที่อยู่',P+'.info.location')}
-    ${F('วัน-เวลาที่สำรวจ',P+'.info.datetime',{ph:'วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.'})}${F('ผู้เข้าสำรวจพื้นที่',P+'.info.surveyors',{area:1,ph:'One name per line'})}
+    ${F('ชื่อหน่วยงาน',P+'.info.agency',{en:'Agency'})}${F('สถานที่/ที่อยู่',P+'.info.location',{en:'Location'})}
+    ${F('วัน-เวลาที่สำรวจ',P+'.info.datetime',{en:'Date & time',ph:'วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.'})}${F('ผู้เข้าสำรวจพื้นที่',P+'.info.surveyors',{en:'Surveyors',area:1,ph:'ชื่อผู้สำรวจ 1 คนต่อ 1 บรรทัด'})}
   </div>`,
   doc:(s,si,x)=>`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>
     <table class="t">${kv('ชื่อหน่วยงาน',s.info.agency)}${kv('สถานที่/ที่อยู่',s.info.location)}${kv('วัน-เวลาที่สำรวจ',s.info.datetime)}<tr><td class="k" style="height:38px">ผู้เข้าสำรวจพื้นที่</td><td>${esc(s.info.surveyors).replace(/\n/g,'<br>')}</td></tr></table>
@@ -417,20 +708,27 @@ const SECTIONS=[
   md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${MDH}${[mdRow('ชื่อหน่วยงาน',s.info.agency),mdRow('สถานที่/ที่อยู่',s.info.location),mdRow('วัน-เวลาที่สำรวจ',s.info.datetime),mdRow('ผู้เข้าสำรวจพื้นที่',s.info.surveyors)].join('\n')}\n`,
   docx:async(s,x,c)=>c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:x.pb,keep:1,before:120,after:120})+
     c.tbl([c.kvr('ชื่อหน่วยงาน',s.info.agency),c.kvr('สถานที่/ที่อยู่',s.info.location),c.kvr('วัน-เวลาที่สำรวจ',s.info.datetime),c.kvr('ผู้เข้าสำรวจพื้นที่',s.info.surveyors||' ')])},
-{id:'place',title:'ข้อมูลสถานที่ติดตั้ง',hint:'Location & floor plan',page:false,
+{id:'place',title:'ข้อมูลสถานที่ติดตั้ง',label:'สถานที่ติดตั้ง',en:'Location & floor plan',chip:'สถานที่',page:false,
+  done:s=>lvl(['equipment','building','address','racks'].filter(k=>filled(s.place[k])).length,4),
+  sum:s=>esc(s.place.building||s.place.equipment||'ยังไม่ระบุสถานที่'),
   editor:(s,P)=>`<div class="grid2">
-    ${F('สถานที่ติดตั้งอุปกรณ์',P+'.place.equipment')}${F('ชื่ออาคาร/ชั้น',P+'.place.building')}${F('ที่อยู่',P+'.place.address')}${F('ห้อง/หมายเลขตู้',P+'.place.racks')}</div>
-    <div class="sub"><div class="sub-h"><b>แผนผังห้องโดยสังเขป</b><span class="grow"></span>
-      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Rows run<select data-b="${P}.floor.orient"><option value="h" ${s.floor.orient==='h'?'selected':''}>Left → right</option><option value="v" ${s.floor.orient==='v'?'selected':''}>Top → bottom</option></select></label>
-      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Door<select data-b="${P}.floor.door">${['left','center','right','none'].map(d=>`<option ${s.floor.door===d?'selected':''}>${d}</option>`).join('')}</select></label></div>
+    ${F('สถานที่ติดตั้งอุปกรณ์',P+'.place.equipment',{en:'Equipment site'})}${F('ชื่ออาคาร/ชั้น',P+'.place.building',{en:'Building / floor'})}${F('ที่อยู่',P+'.place.address',{en:'Address'})}${F('ห้อง/หมายเลขตู้',P+'.place.racks',{en:'Room / rack numbers'})}</div>
+    <div class="fld"><span class="lbl">แผนผังห้องโดยสังเขป<small>Floor plan</small></span>
+      <div class="floor-opts">
+        <label class="inl"><span>ทิศทางแถว<small>Rows run</small></span><select data-b="${P}.floor.orient"><option value="h" ${s.floor.orient==='h'?'selected':''}>ซ้าย → ขวา · Left → right</option><option value="v" ${s.floor.orient==='v'?'selected':''}>บน → ล่าง · Top → bottom</option></select></label>
+        <label class="inl"><span>ประตู<small>Door</small></span><select data-b="${P}.floor.door">${[['left','ซ้าย · Left'],['center','กลาง · Center'],['right','ขวา · Right'],['none','ไม่มี · None']].map(([v,t])=>`<option value="${v}" ${s.floor.door===v?'selected':''}>${t}</option>`).join('')}</select></label></div>
       <div class="floor-edit"><div class="svgbox" id="floorEd">${floorSVG(s.floor,true)}</div>
       <div class="floor-items">${s.floor.items.map((it,i)=>`<div class="fi">
-        <select data-fitype="${i}"><option value="row" ${it.type==='row'?'selected':''}>Rack row</option><option value="label" ${it.type==='label'?'selected':''}>Aisle label</option></select>
-        ${it.type==='row'?`<input data-frow="${i}" value="${esc(it.racks.map(r=>r.n).join(', '))}" placeholder="G1, G3, G5">`:`<input data-b="${P}.floor.items.${i}.text" value="${esc(it.text)}" placeholder="Front / Rear">`}
-        <button class="x" title="Move up" data-act="fUp" data-i="${i}">↑</button><button class="x" title="Move down" data-act="fDn" data-i="${i}">↓</button><button class="x" title="Remove" data-act="fDel" data-i="${i}">×</button></div>`).join('')}
-        <div class="sub-h"><button class="btn sm" data-act="fAddRow">+ Rack row</button><button class="btn sm" data-act="fAddLbl">+ Aisle label</button></div>
-        <p class="note">Type rack names separated by commas; leave a gap between commas for an empty position (<code>, , 10, 09</code>). Click a rack in the plan to mark it as an install rack.</p>
-      </div></div></div>`,
+        <select data-fitype="${i}" aria-label="ชนิดรายการ ลำดับ ${i+1}"><option value="row" ${it.type==='row'?'selected':''}>แถวตู้ Rack</option><option value="label" ${it.type==='label'?'selected':''}>ป้ายทางเดิน</option></select>
+        ${it.type==='row'?`<input type="text" data-frow="${i}" value="${esc(it.racks.map(r=>r.n).join(', '))}" placeholder="G1, G3, G5" aria-label="ชื่อตู้ในแถว ลำดับ ${i+1}">`:`<input type="text" data-b="${P}.floor.items.${i}.text" value="${esc(it.text)}" placeholder="Front / Rear" aria-label="ข้อความป้าย ลำดับ ${i+1}">`}
+        <div class="mv"><button class="btn icon sm" type="button" data-act="fUp" data-i="${i}" aria-label="ย้ายขึ้น ลำดับ ${i+1}" title="ย้ายขึ้น · Move up">${ic('up')}</button><button class="btn icon sm" type="button" data-act="fDn" data-i="${i}" aria-label="ย้ายลง ลำดับ ${i+1}" title="ย้ายลง · Move down">${ic('down')}</button><button class="btn icon sm del ib" type="button" data-confirm="fDel" data-i="${i}" aria-label="ลบรายการ ลำดับ ${i+1}" title="ลบรายการ · Remove item">${ic('trash')}</button></div></div>`).join('')}
+        <div class="acts"><button class="btn sm" type="button" data-act="fAddRow" title="เพิ่มแถวตู้ · Add rack row">${ic('plus')}แถวตู้</button><button class="btn sm" type="button" data-act="fAddLbl" title="เพิ่มป้ายทางเดิน · Add aisle label">${ic('plus')}ป้ายทางเดิน</button></div>
+        <p class="note">พิมพ์ชื่อตู้คั่นด้วยจุลภาค เว้นช่องว่างระหว่างจุลภาคเพื่อเป็นตำแหน่งว่าง (<code>, , 10, 09</code>) · คลิกตู้ในแผนผังเพื่อทำเครื่องหมายว่าเป็นตู้ที่ติดตั้ง</p>
+      </div></div>
+      <div class="flegend" aria-label="คำอธิบายสัญลักษณ์ Legend">
+        <span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="16" height="16" fill="#16607F" stroke="#555"/><path d="M4.5 9.5l3 3 6-7" fill="none" stroke="#fff" stroke-width="2"/></svg>ตู้ที่ติดตั้ง<small>Install rack</small></span>
+        <span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="16" height="16" fill="#fff" stroke="#555"/></svg>ตู้อื่น<small>Other rack</small></span>
+        <span>กด <kbd>Enter</kbd> หรือ <kbd>Space</kbd> เพื่อสลับ</span></div></div>`,
   doc:(s,si,x)=>`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>
     <table class="t"><tr><td colspan="2" class="hd">สถานที่ติดตั้งอุปกรณ์ ${esc(s.place.equipment)}</td></tr>${kv('ชื่ออาคาร/ชั้น',s.place.building)}${kv('ที่อยู่',s.place.address)}${kv('ห้อง/หมายเลขตู้',s.place.racks)}
     <tr><td colspan="2" class="hd">แผนผังห้องโดยสังเขป</td></tr><tr><td colspan="2" class="fig">${floorSVG(s.floor,false)}</td></tr></table>`,
@@ -440,23 +738,10 @@ const SECTIONS=[
     const fp=await svgStrToPng(floorSVG(s.floor,false));let fimg='';
     if(fp){const m=c.addMedia(fp.url);fimg=c.pic(m.rid,fp.w,fp.h,560)}
     return b+c.tbl([c.span(c.run('สถานที่ติดตั้งอุปกรณ์ '+s.place.equipment,{b:1})),c.kvr('ชื่ออาคาร/ชั้น',s.place.building),c.kvr('ที่อยู่',s.place.address),c.kvr('ห้อง/หมายเลขตู้',s.place.racks),c.span(c.run('แผนผังห้องโดยสังเขป',{b:1})),c.span(fimg,'center')])}},
-{id:'racks',title:'ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ',short:'ข้อมูลจุดติดตั้งในตู้ Rack',
-  hint:s=>`${s.racks.length} rack${s.racks.length!==1?'s':''}`,page:true,pages:s=>s.racks.length,
-  editor:(s,P,si)=>s.racks.map((r,ri)=>{const RP=`${P}.racks.${ri}`,w=rackWarnings(r);
-    return `<div class="sub" id="ed-${si}-racks-rack-${ri}"><div class="sub-h"><b>${esc(r.device||'Device')} · ${esc(r.rack||'Rack')}</b><span class="chip">${unitsOf(r)} U · ${esc(uLabel(r)||'—')}</span><span class="grow"></span>
-      <button class="x" title="Move up" data-act="rUp" data-i="${ri}">↑</button><button class="x" title="Move down" data-act="rDn" data-i="${ri}">↓</button><button class="btn sm" data-act="rDup" data-i="${ri}">Duplicate</button>${confirmBtn('rDel','Delete',ri)}</div>
-      <div class="grid2">${F('อุปกรณ์ (หัวตาราง “ข้อมูลจุดติดตั้ง … ในตู้”)',RP+'.device')}${F('ห้อง/หมายเลขตู้',RP+'.rack')}${F('Rack height (U)',RP+'.size',{num:1})}</div>
-      <b style="font-size:12px;color:var(--muted)">Devices in rack — U is the lowest unit the device sits on</b>
-      ${r.devices.map((d,di)=>`<div class="row-line dev">${F('Name',`${RP}.devices.${di}.name`)}${F('U',`${RP}.devices.${di}.u`,{num:1})}${F('Height U',`${RP}.devices.${di}.h`,{num:1})}<button class="x" data-act="dDel" data-i="${ri}" data-j="${di}" title="Remove device">×</button></div>`).join('')}
-      <div class="sub-h"><button class="btn sm" data-act="dAdd" data-i="${ri}">+ Device</button></div>
-      ${w.map(x=>`<span class="warn">${esc(x)}</span>`).join('')}
-      <b style="font-size:12px;color:var(--muted)">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet — จำนวนแหล่งจ่าย ${r.power.length} แหล่ง</b>
-      ${r.power.map((p,pi)=>`<div class="row-line">${F('แหล่งที่ '+(pi+1),`${RP}.power.${pi}`)}<button class="x" data-act="pDel" data-i="${ri}" data-j="${pi}" title="Remove source">×</button></div>`).join('')}
-      <div class="sub-h"><button class="btn sm" data-act="pAdd" data-i="${ri}">+ Power source</button></div>
-      <b style="font-size:12px;color:var(--muted)">ระยะและแนวการเดินสายสัญญาณ — one cable run per line</b>
-      ${r.cables.map((c,ci)=>`<div class="row-line cab">${F('Cable type',`${RP}.cables.${ci}.type`)}${F('Runs',`${RP}.cables.${ci}.text`,{area:1,rows:2,ph:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'})}<button class="x" data-act="cDel" data-i="${ri}" data-j="${ci}" title="Remove cable">×</button></div>`).join('')}
-      <div class="sub-h"><button class="btn sm" data-act="cAdd" data-i="${ri}">+ Cable type</button></div>
-    </div>`}).join('')+`<div class="sub-h"><button class="btn primary" data-act="rAdd">+ Add rack</button></div>`,
+{id:'racks',title:'ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ',label:'ตู้ Rack',en:'Racks, power, cabling',chip:'ตู้ Rack',page:true,pages:s=>s.racks.length,
+  done:s=>{if(!s.racks.length)return 'empty';const st=s.racks.map(rackStat);return st.every(x=>x==='full')?'full':st.every(x=>x==='empty')?'empty':'part'},
+  sum:s=>{const n=s.racks.reduce((a,r)=>a+Object.keys(devErrors(r)).length,0);return `${s.racks.length} ตู้`+(n?` · <span class="err-t">${n} ข้อผิดพลาด</span>`:'')},
+  editor:(s,P,si)=>s.racks.map((r,ri)=>rackCard(r,ri,P,si)).join('')+`<div><button class="btn sm" type="button" data-act="rAdd" title="เพิ่มตู้ Rack · Add rack">${ic('plus')}เพิ่มตู้ Rack</button></div>`,
   doc:(s,si,x)=>s.racks.map((r,i)=>`<div class="page" id="pv-${si}-racks-rack-${i}">${logoHTML()}${i===0?`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>`:''}
     <table class="t"><tr><td colspan="2"><b>ข้อมูลจุดติดตั้ง ${esc(r.device)} ในตู้</b> ${esc(r.rack)}</td></tr>${kv('ห้อง/หมายเลขตู้',r.rack)}${kv('จำนวน Unit',unitsOf(r)+' Unit')}${kv('หมายเลข Unit',uLabel(r))}
     <tr><td colspan="2" class="fig">${rackSVG(r)}</td></tr>
@@ -475,10 +760,12 @@ const SECTIONS=[
         c.span(c.run('ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack',{b:1})),c.kvr('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง'),...r.power.map((p,j)=>c.kvr('แหล่งที่ '+(j+1),p)),
         c.span(c.run('ระยะและแนวการเดินสายสัญญาณ',{b:1})),...r.cables.map(cb=>c.kvr(cb.type,cb.text))])}
     return b}},
-{id:'diagram',title:'แผนภาพการเชื่อมต่ออุปกรณ์ระบบ',hint:'Connection diagram',page:true,pages:()=>1,
-  editor:(s,P)=>{const im=diagImg(s);return `<div class="imgdrop">${im?`<img src="${im}" alt="Connection diagram">`:'No diagram yet. Upload a PNG or JPG exported from Visio, draw.io or PowerPoint.'}
-      <div class="sub-h" style="justify-content:center;margin-top:6px"><label class="btn sm">${im?'Replace image':'Upload diagram'}<input type="file" accept="image/*" data-img="diagram" hidden></label>${im?`<button class="btn sm danger" data-act="rmDiag">Remove</button>`:''}</div></div>
-    ${F('Caption / notes',P+'.diagram.caption',{area:1})}`},
+{id:'diagram',title:'แผนภาพการเชื่อมต่ออุปกรณ์ระบบ',label:'แผนภาพการเชื่อมต่อ',en:'Connection diagram',chip:'แผนภาพ',page:true,pages:()=>1,
+  done:s=>s.diagram.img?'full':filled(s.diagram.caption)?'part':'empty',
+  sum:s=>s.diagram.img?'มีรูปแล้ว':'ยังไม่มีรูป',
+  editor:(s,P)=>{const im=diagImg(s);return `<div class="imgdrop">${im?`<img src="${im}" alt="แผนภาพการเชื่อมต่อ">`:'<span>ยังไม่มีแผนภาพ — อัปโหลดไฟล์ PNG หรือ JPG ที่ส่งออกจาก Visio, draw.io หรือ PowerPoint</span>'}
+      <div class="acts"><label class="btn sm filebtn">${im?'เปลี่ยนรูป':'อัปโหลดแผนภาพ'}<input type="file" accept="image/*" data-img="diagram"></label>${im?`<button class="btn sm del" type="button" data-act="rmDiag" title="ลบรูปแผนภาพ · Remove image">ลบรูป</button>`:''}</div></div>
+    ${F('คำบรรยายภาพ / หมายเหตุ',P+'.diagram.caption',{en:'Caption / notes',area:1})}`},
   doc:(s,si,x)=>{const im=diagImg(s);return `<div class="page">${logoHTML()}<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5><div class="diagram">${im?`<img src="${im}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`},
   md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${diagImg(s)?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${s.diagram.caption}`:''}\n`,
   docx:async(s,x,c)=>{const im=diagImg(s);let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
@@ -495,29 +782,155 @@ function pagePlan(){let pg=3;
     pg=cur+1;return {s,start,secs}});
   return {sites,pages:pg-1}}
 
+/* ---------- chrome: site tabs, outline rail, section chips, cards ---------- */
+const DOT_T={full:'ครบ',part:'บางส่วน',empty:'ว่าง'};
+const dotI=(st,extra='')=>`<i class="dot ${st}" role="img" aria-label="${DOT_T[st]}" title="${DOT_T[st]}"${extra}></i>`;
+let ACTIVE='doc';   // nav key of the card being read/edited: 'doc' | 'site' | 'sec:<id>' | 'rack:<index>'
+const edId=k=>k==='doc'?'ed-doc':k==='site'?`ed-${S.cur}-site`:k.startsWith('sec:')?`ed-${S.cur}-${k.slice(4)}`:`ed-${S.cur}-racks-rack-${k.slice(5)}`;
+const pvId=k=>k==='doc'?'pv-cover':k==='site'?`pv-${S.cur}`:k.startsWith('sec:')?`pv-${S.cur}-${k.slice(4)}`:`pv-${S.cur}-racks-rack-${k.slice(5)}`;
+
 function renderTabs(){
-  const t=document.getElementById('tabs');
-  t.innerHTML=S.sites.map((s,i)=>`<div class="tabw" aria-selected="${i===S.cur}"><button class="tab" role="tab" aria-selected="${i===S.cur}" data-tab="${i}">${esc(s.name||'Untitled site')}</button>${S.sites.length>1?`<button class="tabx" data-tabx="${i}" title="Delete ${esc(s.name||'site')}" aria-label="Delete ${esc(s.name||'site')}">×</button>`:''}</div>`).join('')+
-  `<button class="tab add" data-act="addSite">+ Blank site</button>`;
+  const n=S.sites.length;
+  document.getElementById('tabs').innerHTML=`<div class="tablist" role="tablist" aria-label="ไซต์ Sites">${S.sites.map((s,i)=>{const sel=i===S.cur,nm=s.name||'ไซต์ไม่มีชื่อ';
+    return `<div class="tabw" role="presentation" data-sel="${sel}"><button class="tab" type="button" role="tab" id="tab-${i}" aria-selected="${sel}" aria-controls="editor" tabindex="${sel?0:-1}" data-tab="${i}" title="${esc(nm)}">${esc(nm)}</button>${n>1?`<button class="tabx" type="button" data-tabx="${i}"${sel?'':' tabindex="-1"'} title="ลบไซต์ · Delete site" aria-label="ลบไซต์ ${esc(nm)}">${ic('x')}</button>`:''}</div>`}).join('')}</div><button class="tab-add" type="button" data-act="addSite" title="เพิ่มไซต์ · Add site" aria-label="เพิ่มไซต์ Add site">${ic('plus')}</button>`;
+  ed.setAttribute('aria-labelledby','tab-'+S.cur);
 }
+
+/* statusOf / sumOf: completeness dot and the one-line summary for a nav key. */
+function statusOf(key){const s=site();
+  if(key==='doc')return lvl([S.doc.title,S.doc.company].filter(filled).length,2);
+  if(key==='site')return filled(s.name)?'full':'empty';
+  if(key.startsWith('sec:')){const sec=SECTIONS.find(x=>x.id===key.slice(4));return sec?sec.done(s):'empty'}
+  const r=s.racks[+key.slice(5)];return r?rackStat(r):'empty'}
+function sumOf(key){const s=site();
+  if(key==='doc')return 'ใช้ร่วมกันทุกไซต์';
+  if(key==='site')return `${S.sites.length} ไซต์ในเอกสาร`;
+  if(key.startsWith('sec:')){const sec=SECTIONS.find(x=>x.id===key.slice(4));return sec?sec.sum(s):''}
+  const r=s.racks[+key.slice(5)];if(!r)return '';
+  const used=unitsOf(r),free=Math.max(0,r.size-used),errs=Object.keys(devErrors(r)).length;
+  return `<span class="name">${esc(r.rack||'Rack')}</span><span class="sumline">${r.device?`<span class="d">·</span><span class="mono">${esc(r.device)}</span>`:''}<span class="d">·</span><span><span class="mono">${used}U</span> ใช้</span><span class="d">·</span><span><span class="mono">${free}U</span> ว่าง</span>${errs?`<span class="d">·</span><span class="badge err" style="margin:0">${ic('warn','sm')}<span class="sr">คำเตือน </span>${errs}</span>`:''}</span>`}
+
+function card(key,k,def,id,num,label,en,body){
+  return `<details class="sec" id="${id}" data-k="${k}" data-nav="${key}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}><summary>${ic('chev','chev')}<span class="t"><span class="num">${num}</span>${label}<small>${en}</small></span><span class="sum" data-sum="${key}">${sumOf(key)}</span>${dotI(statusOf(key),` data-dot="${key}"`)}</summary><div class="sec-b">${body}</div></details>`}
+
+function devRow(r,d,di,RP,E){const m=E[di],eid='de-'+d.id,u=`aria-describedby="${eid}"${m?' aria-invalid="true"':''}`;
+  return `<tr class="dev${m?' err':''}" data-di="${di}"><td><input type="text" class="mono" data-b="${RP}.devices.${di}.name" value="${esc(d.name)}" aria-label="ชื่ออุปกรณ์ แถว ${di+1}" placeholder="เช่น NetScaler MPX9200"></td>
+    <td class="u"><input type="number" class="mono" inputmode="numeric" min="1" max="${r.size}" data-b="${RP}.devices.${di}.u" value="${esc(d.u)}" aria-label="U แถว ${di+1}" ${u}></td>
+    <td class="h"><input type="number" class="mono" inputmode="numeric" min="1" max="${r.size}" data-b="${RP}.devices.${di}.h" value="${esc(d.h)}" aria-label="ความสูง U แถว ${di+1}" ${u}></td>
+    <td class="a act"><button class="btn icon sm del ib" type="button" data-confirm="dDel" data-i="${RP.split('.').pop()}" data-j="${di}" aria-label="ลบอุปกรณ์ แถว ${di+1}" title="ลบอุปกรณ์ · Delete device">${ic('trash')}</button></td></tr>
+    <tr class="errmsg"${m?'':' hidden'}><td colspan="4" id="${eid}">${m?ic('warn','sm')+esc(m):''}</td></tr>`}
+/* syncDevErr(ri): update the inline overlap/out-of-range errors in place while typing, so focus stays in the field. */
+function syncDevErr(ri){const r=site().racks[ri],box=document.getElementById(`ed-${S.cur}-racks-rack-${ri}`);if(!r||!box)return;const E=devErrors(r);
+  box.querySelectorAll('tr.dev').forEach(tr=>{const m=E[+tr.dataset.di],er=tr.nextElementSibling;tr.classList.toggle('err',!!m);
+    tr.querySelectorAll('input[type=number]').forEach(i=>{if(m)i.setAttribute('aria-invalid','true');else i.removeAttribute('aria-invalid');i.max=r.size});
+    er.hidden=!m;er.firstElementChild.innerHTML=m?ic('warn','sm')+esc(m):''})}
+
+function rackCard(r,ri,P,si){
+  const RP=`${P}.racks.${ri}`,E=devErrors(r),k='rack:'+r.id,nav='rack:'+ri,def=ri===0;
+  return `<details class="rack" id="ed-${si}-racks-rack-${ri}" data-k="${k}" data-nav="${nav}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}>
+    <summary>${ic('chev','chev')}<span class="rk-sum" data-sum="${nav}">${sumOf(nav)}</span>${dotI(rackStat(r),` data-dot="${nav}"`)}</summary>
+    <div class="rack-b">
+      <div class="row3">${F('ชื่อตู้',RP+'.rack',{en:'Rack name'})}${F('อุปกรณ์หลัก',RP+'.device',{en:'Device · table heading',mono:1})}${F('ขนาด (U)',RP+'.size',{num:1,en:'Height'})}</div>
+      <div class="fld"><span class="lbl">อุปกรณ์ในตู้<small>Devices · U = ตำแหน่งต่ำสุดที่วางอยู่ นับจากล่าง</small></span>
+        <div class="tblwrap"><table class="grid" aria-label="อุปกรณ์ในตู้ ${esc(r.rack)}"><thead><tr><th>ชื่ออุปกรณ์<small>Name</small></th><th class="u">U</th><th class="h">สูง<small>H</small></th><th class="a"><span class="sr">จัดการ</span></th></tr></thead>
+          <tbody>${r.devices.map((d,di)=>devRow(r,d,di,RP,E)).join('')}</tbody></table>
+          <button class="addrow" type="button" data-act="dAdd" data-i="${ri}" title="เพิ่มอุปกรณ์ · Add device">${ic('plus')}เพิ่มอุปกรณ์</button></div></div>
+      <div class="fld"><span class="lbl">แหล่งจ่ายไฟฟ้า<small>Power sources · ${r.power.length} แหล่ง</small></span>
+        <div class="plist">${r.power.map((p,pi)=>`<div class="prow"><span class="i">${pi+1}</span><input type="text" data-b="${RP}.power.${pi}" value="${esc(p)}" aria-label="แหล่งที่ ${pi+1}"><button class="btn icon sm del ib" type="button" data-confirm="pDel" data-i="${ri}" data-j="${pi}" aria-label="ลบแหล่งที่ ${pi+1}" title="ลบแหล่งจ่าย · Delete source">${ic('trash')}</button></div>`).join('')}
+          <div><button class="btn sm" type="button" data-act="pAdd" data-i="${ri}" title="เพิ่มแหล่งจ่าย · Add power source">${ic('plus')}เพิ่มแหล่งจ่าย</button></div></div></div>
+      <div class="fld"><span class="lbl">ระยะและแนวการเดินสายสัญญาณ<small>Cable runs · 1 บรรทัด = 1 เส้นทาง</small></span>
+        ${r.cables.map((c,ci)=>`<div class="cable"><div class="cable-h"><input type="text" data-b="${RP}.cables.${ci}.type" value="${esc(c.type)}" aria-label="ประเภทสาย ${ci+1}" placeholder="เช่น สาย Fiber OM3/4 Patch Cord"><button class="btn icon sm del ib" type="button" data-confirm="cDel" data-i="${ri}" data-j="${ci}" aria-label="ลบประเภทสาย ${ci+1}" title="ลบประเภทสาย · Delete cable type">${ic('trash')}</button></div>
+          <textarea data-b="${RP}.cables.${ci}.text" rows="3" aria-label="เส้นทางสาย ${ci+1}" placeholder="สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น">${esc(c.text)}</textarea></div>`).join('')}
+        <div><button class="btn sm" type="button" data-act="cAdd" data-i="${ri}" title="เพิ่มประเภทสาย · Add cable type">${ic('plus')}เพิ่มประเภทสาย</button></div></div>
+      <div class="foot-actions"><button class="btn icon sm" type="button" data-act="rUp" data-i="${ri}" aria-label="ย้ายตู้ขึ้น" title="ย้ายตู้ขึ้น · Move up">${ic('up')}</button><button class="btn icon sm" type="button" data-act="rDn" data-i="${ri}" aria-label="ย้ายตู้ลง" title="ย้ายตู้ลง · Move down">${ic('down')}</button><button class="btn sm" type="button" data-act="rDup" data-i="${ri}" title="ทำสำเนาตู้ · Duplicate rack">${ic('copy')}ทำสำเนา</button><span class="sp"></span><button class="btn sm del" type="button" data-confirm="rDel" data-i="${ri}" title="ลบตู้ Rack · Delete rack">${ic('trash')}<span>ลบตู้นี้</span></button></div>
+    </div></details>`}
+
+/* focusSel(el): a selector that finds the same control again after renderEditor() rebuilds the form. */
+function focusSel(el){const d=el.dataset||{};
+  if(d.b)return `[data-b="${d.b}"]`;if(d.frow!=null)return `[data-frow="${d.frow}"]`;if(d.fitype!=null)return `[data-fitype="${d.fitype}"]`;
+  if(d.tog)return `[data-tog="${d.tog}"]`;
+  if(el.tagName==='SUMMARY'&&el.parentElement.dataset.k)return `details[data-k="${el.parentElement.dataset.k}"]>summary`;
+  const a=d.act?'act':d.confirm?'confirm':'';if(a)return `[data-${a}="${d[a]}"]${d.i!=null?`[data-i="${d.i}"]`:''}${d.j!=null?`[data-j="${d.j}"]`:''}`;
+  return el.id?'#'+el.id:null}
+
 function renderEditor(){
-  const s=site(),P=`sites.${S.cur}`;
-  let h=`<details class="card" id="ed-doc"><summary><span class="num">—</span><h3>Document cover</h3><span class="hint">Shared by all sites</span></summary><div class="body">
-    <div class="grid2">${F('Document title','doc.title')}${F('Customer / company','doc.company')}${F('Header logo text (used when no logo image)','doc.logoText')}</div>
-    <div class="sub-h"><label class="btn sm">Upload logo image<input type="file" accept="image/*" data-img="logo" hidden></label>${S.doc.logo==null?`<span class="chip">APJC logo</span><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:S.doc.logo?`<span class="chip">Custom logo</span><button class="btn sm" data-act="apjcLogo">Use APJC logo</button><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:`<button class="btn sm" data-act="apjcLogo">Use APJC logo</button>`}</div>
-  </div></details>`;
-
-  h+=`<details class="card" open id="ed-${S.cur}-site"><summary><span class="num">S</span><h3>Site</h3><span class="hint">${S.sites.length} site${S.sites.length>1?'s':''} in this document</span></summary><div class="body">
-    ${F('Site name (section heading)',P+'.name')}
-    <div class="sub-h"><button class="btn sm primary" data-act="dupSite">Duplicate this site as a new draft</button><button class="btn sm" data-act="moveL">Move left</button><button class="btn sm" data-act="moveR">Move right</button><span class="grow"></span>${confirmBtn('delSite','Delete site')}</div>
-    <p class="note">For a new site, duplicate the one most like it, then change names, racks and U numbers.</p>
-  </div></details>`;
-
-  SECTIONS.forEach((sec,k)=>{const hint=typeof sec.hint==='function'?sec.hint(s):sec.hint;
-    h+=`<details class="card" open id="ed-${S.cur}-${sec.id}"><summary><span class="num">${k+1}</span><h3>${sec.short||sec.title}</h3><span class="hint">${hint}</span></summary><div class="body">${sec.editor(s,P,S.cur)}</div></details>`});
-  document.getElementById('editor').innerHTML=h;
+  const s=site(),P=`sites.${S.cur}`,fa=document.activeElement,inEd=!!(fa&&ed.contains(fa));
+  const fsel=inEd?focusSel(fa):null,fd=inEd?fa.closest('details[data-k]'):null,fk=fd?fd.dataset.k:null,sy=window.scrollY;
+  let sel=null;try{if(inEd&&/^(INPUT|TEXTAREA)$/.test(fa.tagName)&&typeof fa.selectionStart==='number')sel=[fa.selectionStart,fa.selectionEnd]}catch(e){}
+  let h=`<div class="form-tools"><span>กำลังแก้ไข <b>${esc(s.name||'ไซต์ไม่มีชื่อ')}</b></span><span class="sp"></span><button class="btn sm" type="button" data-ui="expand" title="ขยายทั้งหมด · Expand all">ขยายทั้งหมด</button><button class="btn sm" type="button" data-ui="collapse" title="ย่อทั้งหมด · Collapse all">ย่อทั้งหมด</button></div>`;
+  h+=card('doc','doc',false,'ed-doc','–','ปกเอกสาร','Document cover',`<div class="grid2">${F('ชื่อเอกสาร','doc.title',{en:'Document title'})}${F('ลูกค้า / บริษัท','doc.company',{en:'Customer / company'})}${F('ข้อความโลโก้หัวกระดาษ','doc.logoText',{en:'Logo text, used when no image'})}</div>
+    <div class="acts"><label class="btn sm filebtn">อัปโหลดโลโก้<input type="file" accept="image/*" data-img="logo"></label>${S.doc.logo==null?`<span class="chip-s">โลโก้ APJC</span><button class="btn sm" type="button" data-act="rmLogo" title="ใช้ข้อความแทนโลโก้ · Use text instead">ใช้ข้อความแทน</button>`:S.doc.logo?`<span class="chip-s">โลโก้ที่อัปโหลด</span><button class="btn sm" type="button" data-act="apjcLogo">ใช้โลโก้ APJC</button><button class="btn sm" type="button" data-act="rmLogo">ใช้ข้อความแทน</button>`:`<button class="btn sm" type="button" data-act="apjcLogo">ใช้โลโก้ APJC</button>`}</div>`);
+  h+=card('site','site:'+s.id,true,`ed-${S.cur}-site`,'S','ไซต์','Site',`${F('ชื่อไซต์ (หัวข้อส่วน)',P+'.name',{en:'Site name'})}
+    <div class="acts"><button class="btn sm primary" type="button" data-act="dupSite" title="ทำสำเนาไซต์นี้เป็นฉบับร่างใหม่ · Duplicate this site">${ic('copy')}ทำสำเนาไซต์</button><button class="btn sm" type="button" data-act="moveL" ${S.cur===0?'disabled ':''}title="ย้ายไซต์ไปซ้าย · Move left">ย้ายซ้าย</button><button class="btn sm" type="button" data-act="moveR" ${S.cur===S.sites.length-1?'disabled ':''}title="ย้ายไซต์ไปขวา · Move right">ย้ายขวา</button><span class="sp"></span><button class="btn sm del" type="button" data-confirm="delSite" ${S.sites.length<2?'disabled ':''}title="ลบไซต์ · Delete site">${ic('trash')}<span>ลบไซต์</span></button></div>
+    <p class="note">ต้องการไซต์ใหม่: ทำสำเนาไซต์ที่คล้ายที่สุด แล้วเปลี่ยนชื่อ ตู้ Rack และหมายเลข U</p>`);
+  SECTIONS.forEach((sec,k)=>{h+=card('sec:'+sec.id,`sec:${s.id}:${sec.id}`,true,`ed-${S.cur}-${sec.id}`,k+1,sec.label,sec.en,sec.editor(s,P,S.cur))});
+  ed.innerHTML=h;
+  if(window.scrollY!==sy)window.scrollTo(0,sy);
+  let t=fsel?ed.querySelector(fsel):null;if(!t&&fk)t=ed.querySelector(`details[data-k="${fk}"]>summary`);
+  if(t){t.focus({preventScroll:true});if(sel&&t.setSelectionRange)try{t.setSelectionRange(sel[0],sel[1])}catch(e){}}
+  renderRail();renderChips();observeNav();
 }
-function confirmBtn(act,label,i){return `<button class="btn sm danger" data-confirm="${act}" ${i!=null?`data-i="${i}"`:''}>${label}</button>`}
+
+/* ---------- outline rail (desktop) and section chips (tablet/phone) ---------- */
+function navKeys(){const s=site(),a=['doc','site'];SECTIONS.forEach(sec=>{a.push('sec:'+sec.id);if(sec.id==='racks')s.racks.forEach((r,j)=>a.push('rack:'+j))});return a}
+function renderRail(){const el=document.getElementById('rail');if(!el)return;const s=site(),top=el.scrollTop;
+  const a=(key,inner)=>`<a href="#${edId(key)}" data-nav="${key}"${key===ACTIVE?' aria-current="true"':''}>${inner}</a>`;
+  const racks=s.racks.map((r,j)=>{const e=Object.keys(devErrors(r)).length;
+    return `<li>${a('rack:'+j,`${ic('rack')}<span class="rn">${esc(r.rack||'Rack')}</span>${e?`<span class="badge err">${ic('warn','sm')}<span class="sr">คำเตือน </span>${e}</span>`:dotI(rackStat(r))}`)}</li>`}).join('');
+  el.innerHTML=`<h6>โครงร่าง <span>Outline</span></h6><div class="site"><b>${esc(s.name||'ไซต์ไม่มีชื่อ')}</b>${SECTIONS.length} ส่วน · ${s.racks.length} ตู้ Rack</div>
+    <ul class="nav"><li>${a('doc',`<span class="n">${ic('doc')}</span><span class="tx">ปกเอกสาร<small>Document cover</small></span>${dotI(statusOf('doc'))}`)}</li>
+    <li>${a('site',`<span class="n">${ic('rack')}</span><span class="tx">ไซต์<small>Site</small></span>${dotI(statusOf('site'))}`)}</li>
+    ${SECTIONS.map((sec,k)=>`<li>${a('sec:'+sec.id,`<span class="n">${k+1}</span><span class="tx">${sec.label}<small>${sec.en}</small></span>${dotI(sec.done(s))}`)}${sec.id==='racks'?`<ul class="nav sub">${racks}<li><a href="#" class="add" data-act="rAdd">${ic('plus')}เพิ่มตู้ Rack</a></li></ul>`:''}</li>`).join('')}</ul>
+    <div class="legend" aria-label="คำอธิบายสัญลักษณ์ Legend"><span><i class="dot full"></i>ครบ<small>complete</small></span><span><i class="dot part"></i>บางส่วน<small>partial</small></span><span><i class="dot"></i>ว่าง<small>empty</small></span></div>`;
+  el.scrollTop=top}
+function renderChips(){const el=document.getElementById('chips');if(!el)return;const s=site(),sl=el.scrollLeft;
+  const c=(key,txt,st,extra='')=>`<a class="chip" href="#${edId(key)}" data-nav="${key}"${key===ACTIVE||(key==='sec:racks'&&ACTIVE.startsWith('rack:'))?' aria-current="true"':''}>${txt}${extra||dotI(st)}</a>`;
+  const errs=s.racks.reduce((n,r)=>n+Object.keys(devErrors(r)).length,0);
+  el.innerHTML=c('doc','ปก',statusOf('doc'))+c('site','ไซต์',statusOf('site'))+SECTIONS.map((sec,k)=>c('sec:'+sec.id,`${k+1} ${sec.chip}`,sec.done(s),sec.id==='racks'&&errs?`<span class="badge err" style="margin:0">${errs}</span>`:'')).join('');
+  el.scrollLeft=sl}
+/* updateChrome(): refresh summaries, dots, rail and chips in place (no form rebuild, so typing keeps focus). */
+function updateChrome(){
+  ed.querySelectorAll('[data-sum]').forEach(el=>{el.innerHTML=sumOf(el.dataset.sum)});
+  ed.querySelectorAll('[data-dot]').forEach(el=>{const st=statusOf(el.dataset.dot);el.className='dot '+st;el.setAttribute('aria-label',DOT_T[st]);el.title=DOT_T[st]});
+  renderRail();renderChips()}
+
+/* ---------- active section: scroll-spy on the form, and the preview follows ---------- */
+const cssPx=n=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n))||0;
+const stickH=()=>cssPx('--bar-h')+cssPx('--seg-h')+cssPx('--chips-h');
+const reduceMotion=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+function pvScrollTo(id,smooth){const t=document.getElementById(id),sc=document.getElementById('pvScroll');if(!t||!sc||!sc.offsetParent)return;
+  const behavior=smooth&&!reduceMotion()?'smooth':'auto';
+  if(getComputedStyle(sc).overflowY!=='visible')sc.scrollTo({top:Math.max(0,t.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-12),behavior});
+  else window.scrollTo({top:Math.max(0,t.getBoundingClientRect().top+window.scrollY-stickH()-8),behavior})}
+function followPreview(key){const id=pvId(key);pvScrollTo(document.getElementById(id)?id:`pv-${S.cur}`,true)}
+function markActive(){
+  document.querySelectorAll('#rail [aria-current],#chips [aria-current]').forEach(e=>e.removeAttribute('aria-current'));
+  document.querySelectorAll(`#rail [data-nav="${ACTIVE}"],#chips [data-nav="${ACTIVE}"]`).forEach(e=>e.setAttribute('aria-current','true'));
+  const ck=ACTIVE.startsWith('rack:')?'sec:racks':ACTIVE,chip=document.querySelector(`#chips [data-nav="${ck}"]`);
+  if(chip){chip.setAttribute('aria-current','true');if(chip.offsetParent)chip.scrollIntoView({block:'nearest',inline:'nearest'})}}
+function setActive(key,follow){const changed=key!==ACTIVE;ACTIVE=key;markActive();if(follow&&changed)followPreview(key)}
+function goto(key){const e=document.getElementById(edId(key));if(!e)return;
+  for(let d=e;d;d=d.parentElement&&d.parentElement.closest('details'))d.open=true;
+  e.scrollIntoView({block:'start'});const sm=e.querySelector(':scope>summary');if(sm)sm.focus({preventScroll:true});
+  ACTIVE=key;markActive();followPreview(key)}
+/* Scroll-spy: an IntersectionObserver watches a 2px line just below the sticky bars; the deepest card crossing it (a rack inside the
+   racks card) is the active one. The preview only follows once the user has scrolled, not on page load. */
+let io,navEls=[],spy=false;const vis=new Set();
+addEventListener('scroll',()=>{spy=true},{passive:true,once:true});
+function observeNav(){
+  if(io)io.disconnect();vis.clear();navEls=[...ed.querySelectorAll('[data-nav]')];
+  if(typeof IntersectionObserver==='undefined')return;
+  const line=Math.round(stickH())+70;
+  io=new IntersectionObserver(es=>{es.forEach(e=>{const k=e.target.dataset.nav;if(e.isIntersecting)vis.add(k);else vis.delete(k)});
+    let best=null;navEls.forEach(e=>{if(vis.has(e.dataset.nav))best=e.dataset.nav});if(best&&best!==ACTIVE)setActive(best,spy)},
+    {rootMargin:`-${line}px 0px -${Math.max(0,innerHeight-line-2)}px 0px`});
+  navEls.forEach(e=>io.observe(e))}
+function setView(v){document.body.dataset.mv=v;document.querySelectorAll('#seg [data-mv]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mv===v)));
+  requestAnimationFrame(()=>{if(v==='preview')pvScrollTo(document.getElementById(pvId(ACTIVE))?pvId(ACTIVE):`pv-${S.cur}`,false);
+    else{const e=document.getElementById(edId(ACTIVE));if(e)e.scrollIntoView({block:'start'})}})}
+/* The sticky offsets come from the measured bar/switch/chips heights, never from hard-coded pixels. */
+function measure(){const h=id=>{const e=document.getElementById(id);return e&&getComputedStyle(e).display!=='none'?Math.round(e.getBoundingClientRect().height):0};
+  const st=document.documentElement.style;st.setProperty('--bar-h',h('bar')+'px');st.setProperty('--seg-h',h('seg')+'px');st.setProperty('--chips-h',h('chips')+'px')}
 
 /* ---------- document preview ---------- */
 function logoSrc(){return S.doc.logo===null||S.doc.logo===undefined?APJC_LOGO:imgURL(S.doc.logo)}
@@ -539,8 +952,8 @@ function docHTML(){
   h+=S.sites.map(siteHTML).join('');
   return {h,pages:plan.pages};
 }
-function renderDoc(){const d=docHTML();document.getElementById('doc').innerHTML=d.h;
-  document.getElementById('pvMeta').textContent=`${d.pages} pages · ${S.sites.length} sites`;
+function renderDoc(){const sc=document.getElementById('pvScroll'),st=sc.scrollTop,d=docHTML();document.getElementById('doc').innerHTML=d.h;sc.scrollTop=st;
+  document.getElementById('pvMeta').textContent=`${d.pages} หน้า · ${S.sites.length} ไซต์`;
   document.getElementById('docName').textContent=S.doc.title||'Site Survey';}
 function renderAll(){renderTabs();renderEditor();renderDoc()}
 
@@ -574,55 +987,122 @@ async function copyWord(){
     sel.removeAllRanges();box.remove();toast(ok?'Copied — paste into Word with Ctrl+V':'Copy was blocked here. Select the preview and press Ctrl+C.')}
 }
 
-/* ---------- modals & toast ---------- */
-function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
-/* toastUndo(msg): announces msg (aria-live polite) with an Undo button; call it right after a destructive mutate(). */
+/* ---------- toast (one live region for everything), modal, delete confirmation, export menu ---------- */
 let tuT;
-function toastUndo(msg){let host=document.getElementById('toastUndo');
-  if(!host){host=document.createElement('div');host.id='toastUndo';host.setAttribute('aria-live','polite');document.body.appendChild(host)}
-  clearTimeout(tuT);host.innerHTML=`<div class="toast toast-undo" role="status"><span></span><button class="btn sm" type="button">Undo</button></div>`;
-  host.querySelector('span').textContent=msg;
-  host.querySelector('button').onclick=()=>{host.innerHTML='';undo()};
-  tuT=setTimeout(()=>{host.innerHTML=''},6000)}
-function modal(title,body,btns){const root=document.getElementById('modalRoot');
-  root.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-card"><header><h3>${esc(title)}</h3>${btns||''}<button class="x" data-close aria-label="Close">×</button></header><div class="mb">${body}</div></div></div>`;
-  root.querySelector('[data-close]').onclick=()=>root.innerHTML='';root.querySelector('.modal').addEventListener('click',e=>{if(e.target.classList.contains('modal'))root.innerHTML=''});}
-async function copyText(t,ta){try{await navigator.clipboard.writeText(t);toast('Copied')}catch(e){if(ta){ta.focus();ta.select();toast('Press Ctrl+C to copy the selected text')}}}
+function toastHost(){let h=document.getElementById('toastUndo');
+  if(!h){h=document.createElement('div');h.id='toastUndo';h.className='toast-host';h.setAttribute('aria-live','polite');h.setAttribute('aria-atomic','true');document.body.appendChild(h)}return h}
+function toast(t,ms){const h=toastHost();clearTimeout(tuT);h.innerHTML='<div class="toast"><span></span></div>';h.querySelector('span').textContent=t;tuT=setTimeout(()=>{h.innerHTML=''},ms||2600)}
+/* toastUndo(msg): announces msg with an Undo button for 6 s; call it right after a destructive act(). Hover/focus pauses the timer. */
+function toastUndo(msg){const h=toastHost();clearTimeout(tuT);
+  h.innerHTML=`<div class="toast">${ic('trash','t-ic')}<span></span><span class="sepd">·</span><button class="tbtn" type="button">Undo</button><button class="tbtn close" type="button" aria-label="ปิด Dismiss" title="ปิด · Dismiss">${ic('x')}</button></div>`;
+  h.querySelector('span').textContent=msg;
+  const bs=h.querySelectorAll('button'),end=()=>{h.innerHTML=''},run=()=>{clearTimeout(tuT);tuT=setTimeout(end,6000)};
+  bs[0].onclick=()=>{end();undo()};bs[1].onclick=end;
+  const t=h.firstChild;t.onmouseenter=()=>clearTimeout(tuT);t.onmouseleave=run;t.onfocusin=()=>clearTimeout(tuT);t.onfocusout=run;run()}
 
-document.getElementById('bMd').onclick=()=>{const md=toMarkdown();modal('Markdown',`<p class="note">Paste into a .md file, Notion, Confluence or a chat.</p><textarea id="mdOut" readonly>${esc(md)}</textarea>`,`<button class="btn sm primary" id="mdCopy">Copy</button>`);
-  document.getElementById('mdCopy').onclick=()=>copyText(md,document.getElementById('mdOut'))};
-document.getElementById('bWord').onclick=copyWord;
-document.getElementById('bJson').onclick=()=>{const js=exportJSON();
-  modal('Save / load JSON',`<p class="note">Copy this text into a .json file to keep the draft or send it to a colleague. To load, choose a .json file or paste the text and press Load.</p>
-    <textarea id="jsOut">${esc(js)}</textarea><div class="sub-h"><label class="btn sm">Choose .json file<input type="file" accept=".json,application/json" id="jsFile" hidden></label><span class="grow"></span><span class="warn" id="jsErr"></span></div>`,
-    `<button class="btn sm" id="jsCopy">Copy</button><button class="btn sm primary" id="jsLoad">Load</button>`);
-  const ta=document.getElementById('jsOut');
-  document.getElementById('jsCopy').onclick=()=>copyText(ta.value,ta);
-  document.getElementById('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
-  document.getElementById('jsLoad').onclick=async()=>{let o;try{o=migrate(JSON.parse(ta.value));if(!o||!o.sites.length)throw 0}
-    catch(e){document.getElementById('jsErr').textContent='This is not a survey JSON. Check that you copied the whole text.';return}
-    o.cur=0;await internImages(o);mutate(()=>{S=o});save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Draft loaded')};
+let modalRet=null;
+function modal(title,body,btns){const root=document.getElementById('modalRoot'),a=document.activeElement;
+  modalRet=a&&a.closest&&a.closest('.menu')?document.getElementById('bExport'):a;
+  root.innerHTML=`<div class="modal"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="mdTitle"><header><h3 id="mdTitle">${esc(title)}</h3>${btns||''}<button class="btn icon" type="button" data-close aria-label="ปิด Close" title="ปิด · Close">${ic('x')}</button></header><div class="mb">${body}</div></div></div>`;
+  root.querySelector('[data-close]').onclick=closeModal;root.querySelector('.modal').addEventListener('click',e=>{if(e.target.classList.contains('modal'))closeModal()});
+  const f=root.querySelector('.mb textarea,.mb button,.mb input');if(f)f.focus()}
+function closeModal(){const root=document.getElementById('modalRoot');if(!root.firstChild)return;root.innerHTML='';
+  const r=modalRet;modalRet=null;if(r&&r.isConnected&&r.focus)r.focus()}
+async function copyText(t,ta){try{await navigator.clipboard.writeText(t);toast('คัดลอกแล้ว')}catch(e){if(ta){ta.focus();ta.select();toast('กด Ctrl+C เพื่อคัดลอกข้อความที่เลือก')}}}
+
+/* armDelete(btn, run): first click arms (red, "คลิกอีกครั้งเพื่อลบ", announced); a second click on the same button runs it.
+   Esc, clicking elsewhere, losing focus or 3 s cancel. Icon-only buttons (.ib) show the label as a popover so rows never reflow. */
+let armed=null;
+function live(t){const l=document.getElementById('armLive');l.textContent='';setTimeout(()=>{l.textContent=t},30)}
+function disarm(){if(!armed)return;const {el,t,html,ib}=armed;clearTimeout(t);armed=null;if(!el.isConnected)return;
+  el.classList.remove('arm');if(ib)el.removeAttribute('data-arm');else{el.innerHTML=html;el.style.minWidth=''}live('')}
+function armDelete(btn,run){
+  if(armed&&armed.el===btn){disarm();run();return}
+  disarm();const label='คลิกอีกครั้งเพื่อลบ',ib=btn.classList.contains('ib');
+  armed={el:btn,html:btn.innerHTML,ib,t:setTimeout(disarm,3000)};btn.classList.add('arm');
+  if(ib)btn.setAttribute('data-arm',label);else{btn.style.minWidth=Math.max(btn.offsetWidth,150)+'px';btn.textContent=label}
+  live(label+' '+(btn.getAttribute('aria-label')||btn.title||''))}
+document.addEventListener('pointerdown',e=>{if(armed&&!armed.el.contains(e.target))disarm()},true);
+document.addEventListener('focusout',e=>{if(armed&&e.target===armed.el)disarm()});
+
+const $=id=>document.getElementById(id);
+const expBtn=$('bExport'),expMenu=$('expMenu'),menuItems=()=>[...expMenu.querySelectorAll('[role=menuitem]')];
+function openMenu(focusFirst){expMenu.hidden=false;expBtn.setAttribute('aria-expanded','true');if(focusFirst)menuItems()[0].focus()}
+function closeMenu(ret){expMenu.hidden=true;expBtn.setAttribute('aria-expanded','false');if(ret)expBtn.focus()}
+expBtn.addEventListener('click',e=>{expMenu.hidden?openMenu(e.detail===0):closeMenu(false)});
+expBtn.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();openMenu(true)}});
+expMenu.addEventListener('click',()=>closeMenu(false));
+expMenu.addEventListener('keydown',e=>{const it=menuItems(),i=it.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){e.preventDefault();it[(i+1)%it.length].focus()}
+  else if(e.key==='ArrowUp'){e.preventDefault();it[(i-1+it.length)%it.length].focus()}
+  else if(e.key==='Home'){e.preventDefault();it[0].focus()}else if(e.key==='End'){e.preventDefault();it[it.length-1].focus()}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();closeMenu(true)}else if(e.key==='Tab')closeMenu(false)});
+document.addEventListener('click',e=>{if(!expMenu.hidden&&!e.target.closest('.menu-wrap'))closeMenu(false)});
+
+document.addEventListener('keydown',e=>{
+  const root=$('modalRoot');
+  if(root.firstChild){
+    if(e.key==='Escape'){e.preventDefault();closeModal();return}
+    if(e.key==='Tab'){const f=[...root.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea,select,a[href]')].filter(x=>x.offsetParent!==null);
+      if(!f.length)return;const first=f[0],last=f[f.length-1],a=document.activeElement;
+      if(!root.contains(a)){e.preventDefault();first.focus()}else if(e.shiftKey&&a===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&a===last){e.preventDefault();first.focus()}}
+    return}
+  if(e.key==='Escape'&&armed)disarm()});
+
+$('bMd').onclick=()=>{const md=toMarkdown();modal('Markdown',`<p class="note">วางลงในไฟล์ .md, Notion, Confluence หรือแชต</p><textarea id="mdOut" readonly aria-label="Markdown">${esc(md)}</textarea>`,`<button class="btn sm primary" type="button" id="mdCopy">คัดลอก</button>`);
+  $('mdCopy').onclick=()=>copyText(md,$('mdOut'))};
+$('bWord').onclick=copyWord;
+$('bDl').onclick=()=>saveFile(fileBase()+'.json',exportJSON(),'application/json');
+$('bJson').onclick=()=>{const js=exportJSON();
+  modal('โหลด / บันทึก JSON · Load / Save JSON',`<p class="note">คัดลอกข้อความนี้ไปเก็บในไฟล์ .json เพื่อสำรองฉบับร่างหรือส่งให้เพื่อนร่วมงาน การโหลด: เลือกไฟล์ .json หรือวางข้อความแล้วกดโหลด</p>
+    <textarea id="jsOut" aria-label="JSON">${esc(js)}</textarea><div class="acts"><label class="btn sm filebtn">เลือกไฟล์ .json<input type="file" accept=".json,application/json" id="jsFile"></label><span class="sp"></span><span class="err-t" id="jsErr" role="alert"></span></div>`,
+    `<button class="btn sm" type="button" id="jsCopy">คัดลอก</button><button class="btn sm primary" type="button" id="jsLoad">โหลด</button>`);
+  const ta=$('jsOut');
+  $('jsCopy').onclick=()=>copyText(ta.value,ta);
+  $('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
+  $('jsLoad').onclick=async()=>{let o;try{o=migrate(JSON.parse(ta.value));if(!o||!o.sites.length)throw 0}
+    catch(e){$('jsErr').textContent='นี่ไม่ใช่ไฟล์ JSON ของแบบสำรวจ ตรวจสอบว่าคัดลอกข้อความมาครบ';return}
+    o.cur=0;await internImages(o);mutate(()=>{S=o});save();renderAll();closeModal();toast('โหลดฉบับร่างแล้ว')};
 };
-document.getElementById('bReset').onclick=()=>modal('Reset',`<p>Choose what to start from. Your current draft in this browser will be replaced.</p>
-  <div class="sub-h"><button class="btn primary" id="rsSample">NT sample (Sriracha + Bangkok)</button><button class="btn" id="rsBlank">One blank site</button></div>`);
-document.getElementById('modalRoot').addEventListener('click',e=>{
-  if(e.target.id==='rsSample'){mutate(()=>{S=sample()})}else if(e.target.id==='rsBlank'){mutate(()=>{S={v:SCHEMA,doc:{...S.doc,title:'Site Survey'},sites:[blankSite(1)],cur:0}})}else return;
-  save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Reset done')});
+/* Reset: pick a start, then an explicit confirmation step (Cancel, "save JSON first", Confirm). Undo can bring the old draft back. */
+$('bReset').onclick=()=>resetStep();
+function resetStep(choice){
+  if(!choice){modal('รีเซ็ตข้อมูลทั้งหมด · Reset',`<p>เลือกจุดเริ่มต้น ฉบับร่างปัจจุบันในเบราว์เซอร์นี้จะถูกแทนที่</p>
+    <div class="acts"><button class="btn primary" type="button" id="rsSample">ตัวอย่าง NT (Sriracha + Bangkok)</button><button class="btn" type="button" id="rsBlank">ไซต์ว่าง 1 ไซต์</button></div>
+    <div class="acts"><span class="sp"></span><button class="btn" type="button" id="rsCancel">ยกเลิก</button></div>`);
+    $('rsSample').onclick=()=>resetStep('sample');$('rsBlank').onclick=()=>resetStep('blank');$('rsCancel').onclick=closeModal;return}
+  const root=$('modalRoot');root.querySelector('h3').textContent='ยืนยันการรีเซ็ต · Confirm reset';
+  root.querySelector('.mb').innerHTML=`<p><b>แทนที่ฉบับร่างปัจจุบันด้วย${choice==='sample'?'ตัวอย่าง NT':'ไซต์ว่าง 1 ไซต์'}?</b></p>
+    <p class="note">ฉบับร่างเดิมจะหายจากหน้านี้ หลังรีเซ็ตกด Undo เพื่อย้อนกลับได้ในเซสชันนี้ แต่ควรบันทึก JSON ไว้ก่อนเพื่อความปลอดภัย</p>
+    <div class="acts"><button class="btn" type="button" id="rsSave">${ic('save')}บันทึก JSON ก่อน</button><span class="sp"></span><button class="btn" type="button" id="rsCancel">ยกเลิก</button><button class="btn primary del-go" type="button" id="rsGo" style="background:var(--danger);border-color:var(--danger);color:var(--danger-fg)">ยืนยันรีเซ็ต</button></div>`;
+  $('rsSave').onclick=()=>{$('bDl').click();$('rsSave').textContent='ดาวน์โหลดแล้ว'};$('rsCancel').onclick=closeModal;
+  $('rsGo').onclick=()=>{mutate(()=>{S=choice==='sample'?sample():{v:SCHEMA,doc:{...S.doc,title:'Site Survey'},sites:[blankSite(1)],cur:0}});save();renderAll();closeModal();toastUndo('รีเซ็ตแล้ว');window.scrollTo(0,0)};
+  $('rsCancel').focus()}
 
 /* ---------- editor events ---------- */
 const ed=document.getElementById('editor');
 let liveT;
+/* liveRefresh(path): after typing, refresh the preview and the derived chrome (summaries, dots, rail, inline errors) without rebuilding the form. */
+function liveRefresh(path){
+  renderDoc();
+  if(/^sites\.\d+\.name$/.test(path))renderTabs();
+  if(/\.floor\./.test(path))refreshFloor();
+  const m=/^sites\.\d+\.racks\.(\d+)\./.exec(path);if(m)syncDevErr(+m[1]);
+  updateChrome()}
+function refreshFloor(){const f=document.getElementById('floorEd');if(!f)return;const a=document.activeElement,k=a&&a.dataset&&a.dataset.tog;
+  f.innerHTML=floorSVG(site().floor,true);if(k){const n=f.querySelector(`[data-tog="${k}"]`);if(n)n.focus({preventScroll:true})}}
+function toggleRack(el){const [i,j]=el.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];
+  if(rk.n){mutate(()=>{rk.on=!rk.on});save();refreshFloor();renderDoc();updateChrome()}}
 ed.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.b){let v=t.value;if(t.type==='number')v=v===''?'':Math.max(1,parseInt(v,10)||1);beginEdit();setP(S,t.dataset.b,v);save();
-    clearTimeout(liveT);liveT=setTimeout(()=>{renderDoc();if(/\.name$/.test(t.dataset.b)&&t.dataset.b.split('.').length===3)renderTabs();
-      if(t.tagName==='SELECT'||/floor\./.test(t.dataset.b)){document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true)}},150)}
+    clearTimeout(liveT);liveT=setTimeout(()=>liveRefresh(t.dataset.b),150)}
   if(t.dataset.frow!=null){beginEdit();const it=site().floor.items[+t.dataset.frow];const old=it.racks;const names=t.value.split(',').map(x=>x.trim());
     it.racks=names.map((n,k)=>({n,on:!!(old.find(o=>o.n&&o.n===n)||{}).on}));save();
-    document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}
+    refreshFloor();renderDoc();updateChrome()}
 });
 ed.addEventListener('focusout',e=>{if(e.target.matches('input,textarea,select'))commitEdit()});
 ed.addEventListener('change',e=>{const t=e.target;
-  if(t.dataset.b&&(t.tagName==='SELECT'||t.type==='number')){renderEditor();renderDoc()}
+  if(t.dataset.b&&(t.tagName==='SELECT'||t.type==='number')){clearTimeout(liveT);liveRefresh(t.dataset.b)}   // in place: no rebuild, so Tab keeps moving through the fields
   if(t.dataset.fitype!=null){const i=+t.dataset.fitype,it=site().floor.items[i];
     mutate(()=>{site().floor.items[i]=t.value==='row'?{id:it.id,type:'row',racks:[R('A1')]}:{id:it.id,type:'label',text:'Front'}});save();renderEditor();renderDoc()}
   if(t.dataset.img){const f=t.files[0];if(!f)return;const kind=t.dataset.img,sd=site();shrink(f,kind==='logo'?400:1600).then(putImg).then(ref=>{
@@ -633,27 +1113,57 @@ function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.on
   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);res(c.toDataURL(file.type==='image/png'?'image/png':'image/jpeg',.88))};im.src=r.result};r.readAsDataURL(file)})}
 
 const mv=(a,i,d)=>{const j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]]};
+/* Card open/closed state: remember it in UI (not in S). data-def = the card's default, so the initial render stays quiet. */
+ed.addEventListener('toggle',e=>{const d=e.target;if(!d.dataset||!d.dataset.k)return;if(d.open!==isOpen(d.dataset.k,d.dataset.def==='1'))setOpen(d.dataset.k,d.open)},true);
+function setAll(on){ed.querySelectorAll('details[data-k]').forEach(d=>{d.open=on})}
+ed.addEventListener('focusin',e=>{const d=e.target.closest&&e.target.closest('details[data-nav]');if(d&&e.target.tagName!=='SUMMARY')setActive(d.dataset.nav,true)});
+const DEL_MSG={delSite:'ลบไซต์แล้ว',rDel:'ลบตู้ Rack แล้ว',dDel:'ลบอุปกรณ์แล้ว',pDel:'ลบแหล่งจ่ายแล้ว',cDel:'ลบประเภทสายแล้ว',fDel:'ลบรายการในแผนผังแล้ว'};
 ed.addEventListener('click',e=>{
-  const tog=e.target.closest('[data-tog]');
-  if(tog){const [i,j]=tog.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];if(rk.n){mutate(()=>{rk.on=!rk.on});save();document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}return}
+  const tog=e.target.closest('[data-tog]');if(tog){toggleRack(tog);return}
   const cb=e.target.closest('[data-confirm]');
-  if(cb){if(cb.dataset.armed){act(cb.dataset.confirm,+cb.dataset.i)}else{cb.dataset.armed='1';cb.textContent='Click again to delete';setTimeout(()=>{if(cb.isConnected){delete cb.dataset.armed;cb.textContent=cb.dataset.confirm==='delSite'?'Delete site':'Delete'}},3000)}return}
-  const b=e.target.closest('[data-act]');if(!b)return;act(b.dataset.act,+b.dataset.i,+b.dataset.j);
+  if(cb){if(!cb.disabled)armDelete(cb,()=>{if(act(cb.dataset.confirm,+cb.dataset.i,+cb.dataset.j))toastUndo(DEL_MSG[cb.dataset.confirm]||'ลบแล้ว')});return}
+  const u=e.target.closest('[data-ui]');if(u){setAll(u.dataset.ui==='expand');return}
+  const b=e.target.closest('[data-act]');if(!b||b.disabled)return;onAct(b.dataset.act,+b.dataset.i,+b.dataset.j);
 });
-document.getElementById('tabs').addEventListener('click',e=>{
-  const x=e.target.closest('[data-tabx]');
-  if(x){const i=+x.dataset.tabx;
-    if(x.dataset.armed){mutate(()=>{S.sites.splice(i,1);if(S.cur>i||S.cur>=S.sites.length)S.cur=Math.max(0,S.cur-1)});save();renderAll();toast('Site deleted');return}
-    x.dataset.armed='1';x.textContent='Delete?';x.classList.add('armed');
-    setTimeout(()=>{if(x.isConnected){delete x.dataset.armed;x.textContent='×';x.classList.remove('armed')}},3000);return}
-  const t=e.target.closest('[data-tab]');if(t){S.cur=+t.dataset.tab;save();renderAll();return}
-  if(e.target.closest('[data-act="addSite"]'))act('addSite')});
-function act(a,i,j){if(mutate(()=>doAct(a,i,j))!==false){save();renderAll()}}  // every action is one undo step
+ed.addEventListener('keydown',e=>{const t=e.target.closest&&e.target.closest('[data-tog]');if(t&&(e.key==='Enter'||e.key===' ')){e.preventDefault();toggleRack(t)}});
+/* Outline rail and section chips: jump to the card (and the preview page); the rail's "add rack" is an ordinary action. */
+document.addEventListener('click',e=>{
+  const a=e.target.closest('#rail [data-nav],#chips [data-nav]');if(a){e.preventDefault();goto(a.dataset.nav);return}
+  const b=e.target.closest('#rail [data-act]');if(b){e.preventDefault();onAct(b.dataset.act,+b.dataset.i,+b.dataset.j)}
+  const s=e.target.closest('#seg [data-mv]');if(s)setView(s.dataset.mv)});
+
+/* Site tabs: roving tabindex, arrow keys / Home / End, × arms a delete. */
+const tabsEl=document.getElementById('tabs');
+tabsEl.addEventListener('click',e=>{
+  const x=e.target.closest('[data-tabx]');if(x){armDelete(x,()=>delTab(+x.dataset.tabx));return}
+  const t=e.target.closest('[data-tab]');if(t){selectSite(+t.dataset.tab);return}
+  if(e.target.closest('[data-act="addSite"]'))onAct('addSite')});
+tabsEl.addEventListener('keydown',e=>{const t=e.target.closest('[data-tab]');if(!t)return;const n=S.sites.length;let i=+t.dataset.tab;
+  if(e.key==='ArrowRight')i=(i+1)%n;else if(e.key==='ArrowLeft')i=(i-1+n)%n;else if(e.key==='Home')i=0;else if(e.key==='End')i=n-1;else return;
+  e.preventDefault();selectSite(i);const nt=document.getElementById('tab-'+i);if(nt)nt.focus()});
+function selectSite(i){if(i===S.cur)return;S.cur=i;save();renderAll();window.scrollTo(0,0);ACTIVE='site';markActive();pvScrollTo(`pv-${i}`,false)}
+function delTab(i){mutate(()=>{S.sites.splice(i,1);if(S.cur>i||S.cur>=S.sites.length)S.cur=Math.max(0,S.cur-1)});save();renderAll();toastUndo('ลบไซต์แล้ว')}
+
+/* act(): one undo step per action; returns false when nothing happened. onAct() adds the UI follow-up (focus / scroll). */
+function act(a,i,j){if(mutate(()=>doAct(a,i,j))===false)return false;save();renderAll();return true}
+function onAct(a,i,j){
+  if(!act(a,i,j))return;
+  if(a==='addSite'||a==='dupSite'){window.scrollTo(0,0);ACTIVE='site';markActive();pvScrollTo(`pv-${S.cur}`,false)}
+  else if(a==='rAdd')goto('rack:'+(site().racks.length-1));
+  else if(a==='dAdd'){const r=site().racks[i],f=document.querySelector(`[data-b="sites.${S.cur}.racks.${i}.devices.${r.devices.length-1}.name"]`);if(f)f.focus()}}
+
+/* Startup wiring for the chrome: view switch default, measured sticky offsets, undo/redo buttons (top bar and phone bottom bar). */
+let lastStick='';
+function measureAndWatch(){measure();const k=stickH()+'x'+innerHeight;if(k!==lastStick){lastStick=k;observeNav()}}
+function initChrome(){document.body.dataset.mv='edit';
+  ['bUndo','mUndo'].forEach(i=>{$(i).onclick=()=>undo()});['bRedo','mRedo'].forEach(i=>{$(i).onclick=()=>redo()});
+  if(typeof ResizeObserver!=='undefined'){const ro=new ResizeObserver(measureAndWatch);['bar','seg','chips'].forEach(id=>ro.observe($(id)))}
+  addEventListener('resize',measureAndWatch);measure()}
 function doAct(a,i,j){const s=site(),fl=s.floor.items;
   switch(a){
     case 'addSite':S.sites.push(blankSite(S.sites.length+1));S.cur=S.sites.length-1;break;
-    case 'dupSite':S.sites.splice(S.cur+1,0,cloneSite(s));S.cur++;toast('Copy created — rename it and edit the racks');break;
-    case 'delSite':if(S.sites.length===1){toast('A document needs at least one site');return false}S.sites.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);break;
+    case 'dupSite':S.sites.splice(S.cur+1,0,cloneSite(s));S.cur++;toast('ทำสำเนาไซต์แล้ว — เปลี่ยนชื่อและแก้ไขตู้ Rack');break;
+    case 'delSite':if(S.sites.length===1){toast('เอกสารต้องมีอย่างน้อย 1 ไซต์');return false}S.sites.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);break;
     case 'moveL':if(S.cur>0){mv(S.sites,S.cur,-1);S.cur--}break;
     case 'moveR':if(S.cur<S.sites.length-1){mv(S.sites,S.cur,1);S.cur++}break;
     case 'rmLogo':S.doc.logo='';break;
@@ -662,11 +1172,14 @@ function doAct(a,i,j){const s=site(),fl=s.floor.items;
     case 'fUp':mv(fl,i,-1);break; case 'fDn':mv(fl,i,1);break; case 'fDel':fl.splice(i,1);break;
     case 'fAddRow':fl.push({id:uid(),type:'row',racks:[R('A1'),R('A2'),R('A3')]});break;
     case 'fAddLbl':fl.push({id:uid(),type:'label',text:'Front'});break;
-    case 'rAdd':s.racks.push(blankRack());break;
-    case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();s.racks.splice(i+1,0,c);break}
+    case 'rAdd':{const nr=blankRack();s.racks.push(nr);setOpen('rack:'+nr.id,true);break}   // UI state, not undoable: the new rack opens
+    case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();setOpen('rack:'+c.id,true);s.racks.splice(i+1,0,c);break}
     case 'rDel':s.racks.splice(i,1);break;
     case 'rUp':mv(s.racks,i,-1);break; case 'rDn':mv(s.racks,i,1);break;
-    case 'dAdd':{const r=s.racks[i];const top=r.devices.reduce((m,d)=>Math.max(m,(+d.u||0)+(+d.h||1)),0);r.devices.push({id:uid(),name:'',u:Math.min(top||21,r.size),h:1});break}
+    case 'dAdd':{const r=s.racks[i],used=new Set();r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(u)for(let k=u;k<u+h;k++)used.add(k)});
+      let u=r.devices.reduce((m,d)=>Math.max(m,(+d.u||0)+(+d.h||1)),0)||21;   // just above the highest device, as before
+      if(u>r.size||used.has(u)){u=0;for(let k=1;k<=r.size&&!u;k++)if(!used.has(k))u=k;u=u||r.size}   // else the first free U
+      r.devices.push({id:uid(),name:'',u,h:1});break}
     case 'dDel':s.racks[i].devices.splice(j,1);break;
     case 'pAdd':s.racks[i].power.push('มีเพียงพอต่อการใช้งาน C12-C13');break;
     case 'pDel':s.racks[i].power.splice(j,1);break;
@@ -783,17 +1296,17 @@ async function buildDocx(){
     ...media.map(m=>({name:'word/media/'+m.file,data:m.bytes}))]);
 }
 const fileBase=()=>(S.doc.title||'Site Survey').replace(/[\\/:*?"<>|]+/g,' ').trim()+' '+new Date().toISOString().slice(0,10);
-document.getElementById('bDocx').onclick=async e=>{const btn=e.currentTarget;btn.disabled=true;const t=btn.textContent;btn.textContent='Building…';
-  try{const blob=await buildDocx();await saveFile(fileBase()+'.docx',blob,blob.type)}catch(err){toast('Could not build the Word file: '+err.message)}
-  btn.disabled=false;btn.textContent=t};
-document.getElementById('bDl').onclick=()=>saveFile(fileBase()+'.json',exportJSON(),'application/json');
+async function exportDocx(){const bs=[...document.querySelectorAll('.js-docx')];bs.forEach(b=>{b.disabled=true;b.querySelector('.lbl').textContent='กำลังสร้าง…'});
+  try{const blob=await buildDocx();await saveFile(fileBase()+'.docx',blob,blob.type)}catch(err){toast('สร้างไฟล์ Word ไม่สำเร็จ: '+err.message)}
+  bs.forEach(b=>{b.disabled=false;b.querySelector('.lbl').textContent='ดาวน์โหลด .docx'})}
+document.querySelectorAll('.js-docx').forEach(b=>{b.onclick=exportDocx});
 
 /* ---------- start: load image cache before first render, move inline images to IndexedDB, then GC ---------- */
 (async()=>{
   idbOpen();  // warm up: the first open can be slow on a fresh profile
   let loaded=false;const lp=loadImages(S).then(n=>{loaded=true;return n});
   await Promise.race([lp,new Promise(r=>setTimeout(r,2000))]);
-  renderAll();histUI();
+  initChrome();renderAll();histUI();measureAndWatch();save();   // persist right away so a fresh sample (random ids) keeps its identity
   if(!loaded)lp.then(n=>{if(n)renderAll()});  // slow IndexedDB: render now, re-render when images arrive
   const before=snap();await internImages(S);if(snap()!==before)save();
   setTimeout(()=>gcImages().catch(()=>{}),3000);
