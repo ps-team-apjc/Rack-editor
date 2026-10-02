@@ -1,0 +1,660 @@
+<title>Rack Site Survey Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Sarabun:wght@400;600;700&display=swap">
+<style>
+/* Layout: sticky toolbar, site tabs, then a two-pane workbench — form editor left, live paper document right (stacks on phones). */
+:root{
+  --bg:#EDF2F3; --surface:#FFFFFF; --surface-2:#F5F8F9; --fg:#14262E; --muted:#58707A; --line:#D2DDE1;
+  --accent:#155E7E; --accent-fg:#FFFFFF; --accent-soft:#DCEBF1; --danger:#B3261E; --ok:#1E7A4C;
+  --paper:#FFFFFF; --ink:#1C1C1C; --doc-accent:#1A5E80; --doc-dev:#0E7C86; --doc-rule:#3A3A3A; --doc-grid:#E3E6E8;
+  --ui:"IBM Plex Sans Thai",system-ui,"Segoe UI",Tahoma,sans-serif;
+  --docf:"Sarabun","IBM Plex Sans Thai",Tahoma,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E181C; --surface:#152329; --surface-2:#1A2C33; --fg:#E1ECEF; --muted:#8EA6AE; --line:#29414B;
+  --accent:#62B4D4; --accent-fg:#06222D; --accent-soft:#1C3A47; --danger:#F08A80; --ok:#6BCB98; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E181C; --surface:#152329; --surface-2:#1A2C33; --fg:#E1ECEF; --muted:#8EA6AE; --line:#29414B;
+  --accent:#62B4D4; --accent-fg:#06222D; --accent-soft:#1C3A47; --danger:#F08A80; --ok:#6BCB98; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--ui);margin:0}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.brand{display:flex;flex-direction:column;min-width:0}
+.brand b{font-size:15px;font-weight:600;letter-spacing:.01em}
+.brand small{color:var(--muted);font-size:12px}
+.bar .grow{flex:1}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:6px;padding:6px 11px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--danger)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.saved{font-size:12px;color:var(--muted)}
+
+.tabs{display:flex;gap:4px;padding:10px 16px 0;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--bg)}
+.tab{border:1px solid var(--line);border-bottom:none;background:transparent;padding:7px 14px;border-radius:7px 7px 0 0;cursor:pointer;white-space:nowrap;color:var(--muted)}
+.tabw{display:flex;align-items:stretch;border:1px solid var(--line);border-bottom:none;border-radius:7px 7px 0 0;flex:none}
+.tabw .tab{border:none;border-radius:7px 0 0 7px;padding-right:6px}
+.tabw .tab:last-child{border-radius:7px 7px 0 0;padding-right:14px}
+.tabw[aria-selected="true"]{background:var(--surface);box-shadow:inset 0 3px 0 var(--accent)}
+.tab[aria-selected="true"]{color:var(--fg);font-weight:600}
+.tabx{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:0 10px 0 4px;font-size:15px;line-height:1;border-radius:0 7px 0 0}
+.tabx:hover{color:var(--danger)}
+.tabx.armed{color:var(--danger);font-size:12px;font-weight:600;padding:0 10px}
+.tab.add{border-style:dashed;color:var(--accent)}
+
+.work{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;padding:16px;align-items:start}
+@media (max-width:980px){.work{grid-template-columns:minmax(0,1fr)}}
+.editor{display:flex;flex-direction:column;gap:12px;min-width:0}
+.preview-wrap{position:sticky;top:calc(env(safe-area-inset-top,0px) + 70px);max-height:calc(100vh - 90px);overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+@media (max-width:980px){.preview-wrap{position:static;max-height:none}}
+.pv-head{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;margin-bottom:12px}
+.pv-head span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+
+details.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details.card>summary{list-style:none;cursor:pointer;padding:12px 14px;display:flex;gap:10px;align-items:baseline}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary .num{font-family:var(--mono);font-size:12px;color:var(--accent);min-width:1.4em}
+details.card>summary h3{margin:0;font-size:14px;font-weight:600}
+details.card>summary .hint{margin-left:auto;font-size:12px;color:var(--muted)}
+details.card[open]>summary{border-bottom:1px solid var(--line)}
+.body{padding:14px;display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 12px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+label.f input,label.f textarea,label.f select{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:7px 9px;color:var(--fg);font-size:14px;width:100%}
+label.f textarea{resize:vertical;min-height:56px}
+.sub{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
+.sub-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sub-h b{font-weight:600}
+.sub-h .grow{flex:1}
+.row-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.row-line.dev{grid-template-columns:minmax(0,2.4fr) minmax(56px,.6fr) minmax(56px,.6fr) auto}
+.row-line.cab{grid-template-columns:minmax(0,1fr) minmax(0,1.8fr) auto;align-items:start}
+@media (max-width:520px){.row-line.cab{grid-template-columns:minmax(0,1fr) auto}.row-line.cab>:nth-child(2){grid-column:1/-1;grid-row:2}}
+.x{border:none;background:transparent;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:6px;font-size:16px;line-height:1}
+.x:hover{color:var(--danger);background:var(--surface)}
+.note{font-size:12px;color:var(--muted);margin:0}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--fg)}
+.warn{color:var(--danger);font-size:12px}
+.floor-edit{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.floor-edit .svgbox{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto;max-width:100%}
+.floor-items{flex:1;min-width:240px;display:flex;flex-direction:column;gap:8px}
+.fi{display:grid;grid-template-columns:118px minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
+.fi select,.fi input{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:13px;width:100%;min-width:0}
+.imgdrop{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--muted);font-size:13px}
+.imgdrop img{max-height:180px;margin:0 auto 8px;display:block;border-radius:4px}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(5,15,20,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column}
+.modal-card header{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.modal-card header h3{margin:0;font-size:15px;flex:1}
+.modal-card .mb{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.modal-card textarea{width:100%;min-height:320px;font:12px/1.5 var(--mono);background:var(--surface-2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;z-index:60}
+
+/* ---------- paper document (always print-white, like the Word file) ---------- */
+.doc{display:flex;flex-direction:column;gap:16px;align-items:center}
+.page{background:var(--paper);color:var(--ink);width:100%;max-width:640px;aspect-ratio:auto;min-height:420px;padding:28px 34px 34px;box-shadow:0 1px 3px rgba(0,0,0,.12),0 6px 20px rgba(0,0,0,.06);font:12.5px/1.55 var(--docf);position:relative}
+@media (max-width:520px){.page{padding:20px 16px}}
+.page .logo{display:flex;justify-content:flex-end;min-height:30px;margin-bottom:14px}
+.page .logo img{height:30px;width:auto}
+.page .logo .lt{font:700 18px/1 var(--docf);color:var(--doc-accent);letter-spacing:.04em}
+.cover{display:flex;flex-direction:column;justify-content:center;min-height:520px}
+.cover .logo{position:absolute;top:28px;right:34px;margin:0}
+.cover hr{border:none;border-top:2px solid var(--doc-accent);margin:0}
+.cover h1{font:400 34px/1.15 var(--docf);color:var(--doc-accent);margin:22px 0}
+.cover .co{font-size:14px;margin:16px 0 22px;color:#333}
+.cover .sc{font-size:11px;color:#555}
+.toc h4{text-align:center;margin:0 0 14px;font-size:13px}
+.toc>div.e{display:flex;gap:6px;font-size:12px;padding:3px 0}
+.toc>div.s{padding-left:14px;font-weight:600}
+.toc>div.e::after{content:"";flex:1;border-bottom:1px dotted #999;margin-bottom:5px;order:2}
+.toc>div.e span:last-child{order:3}
+.page h2{font:400 17px/1.3 var(--docf);color:var(--doc-accent);margin:0 0 12px}
+.page h5{font:700 13px/1.4 var(--docf);margin:14px 0 8px}
+table.t{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:6px}
+table.t td{border:1px solid var(--doc-rule);padding:3px 7px;vertical-align:top}
+table.t td.k{width:36%}
+table.t td.hd{font-weight:700}
+table.t td.fig{text-align:center;padding:12px}
+table.t td .ln{display:block}
+.fig svg{max-width:100%;height:auto}
+.diagram img{max-width:100%;margin:0 auto;display:block}
+.diagram .ph{border:1px dashed #aaa;color:#888;padding:40px;text-align:center}
+.cap{font-size:11px;color:#444;text-align:center;margin-top:6px;white-space:pre-wrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="bar">
+  <div class="brand"><b>Rack Site Survey Editor</b><small id="docName">Site Survey</small></div>
+  <div class="grow"></div>
+  <span class="saved" id="saved">Draft saved in this browser</span>
+  <div class="actions">
+    <button class="btn primary" id="bDocx">Download Word (.docx)</button>
+    <button class="btn" id="bDl">Download JSON</button>
+    <button class="btn" id="bMd">Copy Markdown</button>
+    <button class="btn" id="bWord">Copy for Word</button>
+    <button class="btn" id="bJson">Save / load JSON</button>
+    <button class="btn ghost" id="bReset">Reset…</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs" role="tablist" aria-label="Sites"></nav>
+<main class="work">
+  <section class="editor" id="editor" aria-label="Editor"></section>
+  <section class="preview-wrap" aria-label="Document preview">
+    <div class="pv-head"><span>Document preview</span><span id="pvMeta"></span></div>
+    <div class="doc" id="doc"></div>
+  </section>
+</main>
+<div id="modalRoot"></div>
+
+<script>
+(function(){
+const KEY='rack-site-survey-v1';
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const R=(n,on)=>({n,on:!!on});
+const APJC_LOGO='data:image/png;base64,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';
+
+/* ---------- sample data from "NT Site survey.pdf" ---------- */
+function sample(){
+  const pw=t=>[t,t];
+  const sri={id:uid(),name:'NT Data Center Sriracha',
+    info:{agency:'NTDC',location:'NT Data Center Sriracha',datetime:'วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.',surveyors:''},
+    place:{equipment:'NetScaler MPX9200, H3C Server',building:'Eastern Economic Telecommunication Center ชั้นที่ 3',address:'Eastern Economic Telecommunication Cent Sriracha',racks:'Rack G-1, G-3, G-5'},
+    floor:{orient:'h',door:'center',items:[
+      {id:uid(),type:'label',text:'Rear'},
+      {id:uid(),type:'row',racks:[R('G1',1),R('G3',1),R('G5',1)]},
+      {id:uid(),type:'label',text:'Front'},
+      {id:uid(),type:'row',racks:[R('G2'),R('G4'),R('G6')]},
+      {id:uid(),type:'label',text:'Rear'}]},
+    racks:[
+      {id:uid(),device:'MPX9200',rack:'Rack G3',size:42,devices:[{id:uid(),name:'NetScaler MPX9200',u:21,h:1}],power:pw('มีเพียงพอต่อการใช้งาน C12-C13'),
+       cables:[{id:uid(),type:'สาย LOM RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Management RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Fiber OM3/4 Patch Cord',text:'สาย Fiber เชื่อมต่อ Switch ภายในตู้ 3 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack G5 7 เมตร จำนวน 2 เส้น'}]},
+      {id:uid(),device:'MPX9200',rack:'Rack G5',size:42,devices:[{id:uid(),name:'NetScaler MPX9200',u:21,h:1}],power:pw('มีเพียงพอต่อการใช้งาน C12-C13'),
+       cables:[{id:uid(),type:'สาย LAN RJ45 สำหรับ LOM',text:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Management RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Fiber OM3/4 Patch Cord',text:'สาย Fiber เชื่อมต่อ Switch ภายในตู้ 3 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack G3 7 เมตร จำนวน 2 เส้น'}]},
+      {id:uid(),device:'H3C Server',rack:'Rack G1',size:42,devices:[{id:uid(),name:'H3C Server',u:27,h:1}],power:pw('มีเพียงพอต่อการใช้งาน C12-C13'),
+       cables:[{id:uid(),type:'สาย LAN RJ45',text:'สาย Lan เชื่อมต่อ Switch ข้ามตู้ไป Rack G3 7 เมตร จำนวน 3 เส้น'}]}],
+    diagram:{img:null,caption:'Existing SRI FL3 / New SRIRACHA FL3 — All Connectivity = 10G-SR'}};
+  const bkk={id:uid(),name:'NT Data Center Bangkok',
+    info:{agency:'NTDC',location:'NT Data Center Bangkok',datetime:'วันพุธที่ 9 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.',surveyors:''},
+    place:{equipment:'NetScaler MPX9200, H3C Server',building:'NT HQ Bangkok Tower 4 Floor 4',address:'NT HQ Bangkok',racks:'Rack 09, Rack 10, Rack N-A08'},
+    floor:{orient:'v',door:'center',items:[
+      {id:uid(),type:'label',text:'Front'},
+      {id:uid(),type:'row',racks:['','','','','','',R('10',1),R('09',1),''].map(x=>x===''?R(''):x)},
+      {id:uid(),type:'label',text:'Rear'},
+      {id:uid(),type:'row',racks:[R(''),R('N-A08',1),R(''),R(''),R(''),R(''),R('03'),R('02'),R('')]},
+      {id:uid(),type:'label',text:'Front'}]},
+    racks:[
+      {id:uid(),device:'MPX9200',rack:'Rack 10',size:42,devices:[{id:uid(),name:'NetScaler MPX9200',u:21,h:1}],power:pw('มีเพียงพอต่อการใช้งาน 5-15P to C13'),
+       cables:[{id:uid(),type:'สาย LOM RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Management RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Fiber OM3/4 Patch Cord',text:'สาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 02 10 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 03 10 เมตร จำนวน 2 เส้น'}]},
+      {id:uid(),device:'MPX9200',rack:'Rack 09',size:42,devices:[{id:uid(),name:'NetScaler MPX9200',u:21,h:1}],power:pw('มีเพียงพอต่อการใช้งาน 5-15P to C13'),
+       cables:[{id:uid(),type:'สาย LAN RJ45 สำหรับ LOM',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Management RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น'},
+               {id:uid(),type:'สาย Fiber OM3/4 Patch Cord',text:'สาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 02 10 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 03 10 เมตร จำนวน 2 เส้น'}]},
+      {id:uid(),device:'H3C Server',rack:'Rack N-A08',size:42,devices:[{id:uid(),name:'H3C Server',u:40,h:1}],power:pw('มีเพียงพอต่อการใช้งาน 5-15P to C13'),
+       cables:[{id:uid(),type:'สาย LAN RJ45',text:'สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 3 เส้น'}]}],
+    diagram:{img:null,caption:'All Connectivity = 10G-SR'}};
+  return {doc:{title:'Site Survey',company:'National Telecom Public Company Limited',logoText:'APJC',logo:null},sites:[sri,bkk],cur:0};
+}
+function blankSite(n){
+  return {id:uid(),name:'New site '+n,info:{agency:'',location:'',datetime:'',surveyors:''},
+    place:{equipment:'',building:'',address:'',racks:''},
+    floor:{orient:'h',door:'center',items:[{id:uid(),type:'label',text:'Rear'},{id:uid(),type:'row',racks:[R('A1'),R('A2'),R('A3')]},{id:uid(),type:'label',text:'Front'}]},
+    racks:[blankRack()],diagram:{img:null,caption:''}};
+}
+function blankRack(){return {id:uid(),device:'',rack:'Rack ',size:42,devices:[{id:uid(),name:'',u:21,h:1}],power:['มีเพียงพอต่อการใช้งาน C12-C13','มีเพียงพอต่อการใช้งาน C12-C13'],
+  cables:[{id:uid(),type:'สาย LOM RJ45',text:''},{id:uid(),type:'สาย Management RJ45',text:''},{id:uid(),type:'สาย Fiber OM3/4 Patch Cord',text:''}]}}
+function cloneSite(s){const c=JSON.parse(JSON.stringify(s));c.id=uid();c.name=s.name+' (copy)';
+  c.floor.items.forEach(i=>i.id=uid());c.racks.forEach(r=>{r.id=uid();r.devices.forEach(d=>d.id=uid());r.cables.forEach(x=>x.id=uid())});return c}
+
+let S;
+try{const raw=localStorage.getItem(KEY);S=raw?JSON.parse(raw):null}catch(e){S=null}
+if(!S||!Array.isArray(S.sites)||!S.sites.length)S=sample();
+if(S.cur==null||S.cur>=S.sites.length)S.cur=0;
+
+let saveT;
+function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
+  const el=document.getElementById('saved');
+  try{localStorage.setItem(KEY,JSON.stringify(S));el.textContent='Draft saved in this browser';el.className='saved'}
+  catch(e){el.textContent='Not saved here — use Save / load JSON';el.className='saved warn'}
+},300)}
+const site=()=>S.sites[S.cur];
+
+/* ---------- path helpers for bound inputs ---------- */
+function getP(o,p){return p.split('.').reduce((a,k)=>a==null?a:a[k],o)}
+function setP(o,p,v){const ks=p.split('.');const last=ks.pop();const t=ks.reduce((a,k)=>a[k],o);t[last]=v}
+
+/* ---------- derived ---------- */
+function unitsOf(r){return r.devices.reduce((a,d)=>a+(+d.h||0),0)}
+function uLabel(r){return r.devices.filter(d=>d.u).map(d=>(+d.h>1)?`U ${d.u}–${+d.u+ +d.h-1}`:`U ${d.u}`).join(', ')}
+function rackWarnings(r){
+  const w=[],occ={};
+  r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(!u)return;
+    if(u<1||u+h-1>r.size)w.push(`${d.name||'Device'} is outside 1–${r.size}U`);
+    for(let i=u;i<u+h;i++){if(occ[i])w.push(`U ${i} is used by both ${occ[i]} and ${d.name||'device'}`);occ[i]=d.name||'device'}});
+  return [...new Set(w)];
+}
+
+/* ---------- SVG drawings ---------- */
+function rackSVG(r){
+  const UH=8,top=10,lx=26,w=220,H=r.size*UH;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lx+w+14} ${H+top*2}" width="${lx+w+14}" height="${H+top*2}" font-family="Sarabun,Tahoma,sans-serif">`;
+  s+=`<rect x="${lx-18}" y="${top-4}" width="${w+26}" height="${H+8}" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="1.5"/>`;
+  s+=`<rect x="${lx}" y="${top}" width="${w}" height="${H}" fill="#FAFBFC" stroke="#9AA3A8" stroke-width=".6"/>`;
+  for(let u=1;u<=r.size;u++){const y=top+H-u*UH;
+    s+=`<line x1="${lx}" x2="${lx+w}" y1="${y}" y2="${y}" stroke="#E3E6E8" stroke-width=".5"/>`;
+    s+=`<text x="${lx-4}" y="${y+UH-2}" font-size="5.5" text-anchor="end" fill="#777" font-family="IBM Plex Mono,monospace">${u}</text>`}
+  r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(!u||u<1)return;const y=top+H-(u+h-1)*UH;
+    s+=`<rect x="${lx+1.5}" y="${y+.6}" width="${w-3}" height="${h*UH-1.2}" fill="#0E7C86"/>`;
+    s+=`<text x="${lx+w/2}" y="${y+h*UH/2+2.4}" font-size="${h>1?8:6.5}" font-weight="700" fill="#FFFFFF" text-anchor="middle">${esc(d.name)}</text>`});
+  return s+`</svg>`;
+}
+function floorSVG(f,interactive){
+  const vert=f.orient==='v', CW=vert?36:72, CH=vert?28:90, LBL=30, pad=18;
+  // Lay out items along the main axis (top→bottom for horizontal rows, left→right for vertical columns)
+  let pos=pad, cross=0; const placed=[];
+  f.items.forEach((it,i)=>{if(it.type==='row'){const len=it.racks.length*(vert?CH:CW);cross=Math.max(cross,len);placed.push({it,i,at:pos,size:vert?CW:CH});pos+=vert?CW:CH}
+    else{placed.push({it,i,at:pos,size:LBL});pos+=LBL}});
+  const crossTot=Math.max(cross,vert?120:160)+pad*2+ (vert?24:0);
+  const main=pos+pad+(vert?24:24);
+  const W=vert?main:crossTot, H=vert?crossTot+10:main+10;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Sarabun,Tahoma,sans-serif">`;
+  s+=`<rect x="1" y="1" width="${W-2}" height="${H-12}" fill="#FFFFFF" stroke="#1A5E80" stroke-width="1.2"/>`;
+  const c0=(crossTot-cross)/2;
+  placed.forEach(p=>{
+    if(p.it.type==='label'){
+      if(vert){const x=p.at+LBL/2,y=(H-10)/2;s+=`<text x="${x}" y="${y}" font-size="11" fill="#1C1C1C" text-anchor="middle" transform="rotate(-90 ${x} ${y})">${esc(p.it.text)}</text>`}
+      else s+=`<text x="${W/2}" y="${p.at+LBL/2+4}" font-size="11" fill="#1C1C1C" text-anchor="middle">${esc(p.it.text)}</text>`;
+    }else{
+      const n=p.it.racks.length,len=n*(vert?CH:CW),start=(crossTot-len)/2;
+      p.it.racks.forEach((rk,j)=>{
+        const x=vert?p.at:start+j*CW, y=vert?start+j*CH:p.at, w=vert?CW:CW, h=vert?CH:CH;
+        const fill=rk.on?'#16607F':'#FFFFFF', tc='#1C1C1C';
+        s+=`<g ${interactive?`data-tog="${p.i}:${j}" style="cursor:pointer"`:''}><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="#555" stroke-width=".8"/>`;
+        if(rk.n)s+=`<text x="${x+w/2}" y="${vert?y+h/2+4:y+h-8}" font-size="${vert?9:10}" fill="${tc}" text-anchor="middle" pointer-events="none">${esc(rk.n)}</text>`;
+        s+=`</g>`});
+    }});
+  // door
+  if(f.door!=='none'){const dw=60,dx=f.door==='left'?W*0.18:f.door==='right'?W*0.82:W/2,yb=H-11;
+    s+=`<path d="M${dx-dw/2} ${yb+6} L${dx-dw/2+8} ${yb-7} L${dx+dw/2-8} ${yb-7} L${dx+dw/2} ${yb+6} Z" fill="#1A5E80"/><text x="${dx}" y="${yb+3}" font-size="9.5" fill="#FFFFFF" text-anchor="middle">Door</text>`}
+  return s+`</svg>`;
+}
+
+/* ---------- editor ---------- */
+const F=(label,path,opt={})=>{const v=getP(S,path)??'';
+  return `<label class="f">${esc(label)}${opt.area?`<textarea data-b="${path}" rows="${opt.rows||2}" placeholder="${esc(opt.ph||'')}">${esc(v)}</textarea>`:
+  `<input data-b="${path}" ${opt.num?'type="number" min="1"':''} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
+
+function renderTabs(){
+  const t=document.getElementById('tabs');
+  t.innerHTML=S.sites.map((s,i)=>`<div class="tabw" aria-selected="${i===S.cur}"><button class="tab" role="tab" aria-selected="${i===S.cur}" data-tab="${i}">${esc(s.name||'Untitled site')}</button>${S.sites.length>1?`<button class="tabx" data-tabx="${i}" title="Delete ${esc(s.name||'site')}" aria-label="Delete ${esc(s.name||'site')}">×</button>`:''}</div>`).join('')+
+  `<button class="tab add" data-act="addSite">+ Blank site</button>`;
+}
+function renderEditor(){
+  const s=site(),P=`sites.${S.cur}`;
+  let h=`<details class="card"><summary><span class="num">—</span><h3>Document cover</h3><span class="hint">Shared by all sites</span></summary><div class="body">
+    <div class="grid2">${F('Document title','doc.title')}${F('Customer / company','doc.company')}${F('Header logo text (used when no logo image)','doc.logoText')}</div>
+    <div class="sub-h"><label class="btn sm">Upload logo image<input type="file" accept="image/*" data-img="logo" hidden></label>${S.doc.logo==null?`<span class="chip">APJC logo</span><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:S.doc.logo?`<span class="chip">Custom logo</span><button class="btn sm" data-act="apjcLogo">Use APJC logo</button><button class="btn sm danger" data-act="rmLogo">Use text instead</button>`:`<button class="btn sm" data-act="apjcLogo">Use APJC logo</button>`}</div>
+  </div></details>`;
+
+  h+=`<details class="card" open><summary><span class="num">S</span><h3>Site</h3><span class="hint">${S.sites.length} site${S.sites.length>1?'s':''} in this document</span></summary><div class="body">
+    ${F('Site name (section heading)',P+'.name')}
+    <div class="sub-h"><button class="btn sm primary" data-act="dupSite">Duplicate this site as a new draft</button><button class="btn sm" data-act="moveL">Move left</button><button class="btn sm" data-act="moveR">Move right</button><span class="grow"></span>${confirmBtn('delSite','Delete site')}</div>
+    <p class="note">For a new site, duplicate the one most like it, then change names, racks and U numbers.</p>
+  </div></details>`;
+
+  h+=`<details class="card" open><summary><span class="num">1</span><h3>ข้อมูลเกี่ยวกับการสำรวจพื้นที่</h3><span class="hint">Survey info</span></summary><div class="body"><div class="grid2">
+    ${F('ชื่อหน่วยงาน',P+'.info.agency')}${F('สถานที่/ที่อยู่',P+'.info.location')}
+    ${F('วัน-เวลาที่สำรวจ',P+'.info.datetime',{ph:'วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.'})}${F('ผู้เข้าสำรวจพื้นที่',P+'.info.surveyors',{area:1,ph:'One name per line'})}
+  </div></div></details>`;
+
+  h+=`<details class="card" open><summary><span class="num">2</span><h3>ข้อมูลสถานที่ติดตั้ง</h3><span class="hint">Location & floor plan</span></summary><div class="body"><div class="grid2">
+    ${F('สถานที่ติดตั้งอุปกรณ์',P+'.place.equipment')}${F('ชื่ออาคาร/ชั้น',P+'.place.building')}${F('ที่อยู่',P+'.place.address')}${F('ห้อง/หมายเลขตู้',P+'.place.racks')}</div>
+    <div class="sub"><div class="sub-h"><b>แผนผังห้องโดยสังเขป</b><span class="grow"></span>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Rows run<select data-b="${P}.floor.orient"><option value="h" ${s.floor.orient==='h'?'selected':''}>Left → right</option><option value="v" ${s.floor.orient==='v'?'selected':''}>Top → bottom</option></select></label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:6px">Door<select data-b="${P}.floor.door">${['left','center','right','none'].map(d=>`<option ${s.floor.door===d?'selected':''}>${d}</option>`).join('')}</select></label></div>
+      <div class="floor-edit"><div class="svgbox" id="floorEd">${floorSVG(s.floor,true)}</div>
+      <div class="floor-items">${s.floor.items.map((it,i)=>`<div class="fi">
+        <select data-fitype="${i}"><option value="row" ${it.type==='row'?'selected':''}>Rack row</option><option value="label" ${it.type==='label'?'selected':''}>Aisle label</option></select>
+        ${it.type==='row'?`<input data-frow="${i}" value="${esc(it.racks.map(r=>r.n).join(', '))}" placeholder="G1, G3, G5">`:`<input data-b="${P}.floor.items.${i}.text" value="${esc(it.text)}" placeholder="Front / Rear">`}
+        <button class="x" title="Move up" data-act="fUp" data-i="${i}">↑</button><button class="x" title="Move down" data-act="fDn" data-i="${i}">↓</button><button class="x" title="Remove" data-act="fDel" data-i="${i}">×</button></div>`).join('')}
+        <div class="sub-h"><button class="btn sm" data-act="fAddRow">+ Rack row</button><button class="btn sm" data-act="fAddLbl">+ Aisle label</button></div>
+        <p class="note">Type rack names separated by commas; leave a gap between commas for an empty position (<code>, , 10, 09</code>). Click a rack in the plan to mark it as an install rack.</p>
+      </div></div></div>
+  </div></details>`;
+
+  h+=`<details class="card" open><summary><span class="num">3</span><h3>ข้อมูลจุดติดตั้งในตู้ Rack</h3><span class="hint">${s.racks.length} rack${s.racks.length!==1?'s':''}</span></summary><div class="body">`;
+  s.racks.forEach((r,ri)=>{const RP=`${P}.racks.${ri}`,w=rackWarnings(r);
+    h+=`<div class="sub"><div class="sub-h"><b>${esc(r.device||'Device')} · ${esc(r.rack||'Rack')}</b><span class="chip">${unitsOf(r)} U · ${esc(uLabel(r)||'—')}</span><span class="grow"></span>
+      <button class="x" title="Move up" data-act="rUp" data-i="${ri}">↑</button><button class="x" title="Move down" data-act="rDn" data-i="${ri}">↓</button><button class="btn sm" data-act="rDup" data-i="${ri}">Duplicate</button>${confirmBtn('rDel','Delete',ri)}</div>
+      <div class="grid2">${F('อุปกรณ์ (หัวตาราง “ข้อมูลจุดติดตั้ง … ในตู้”)',RP+'.device')}${F('ห้อง/หมายเลขตู้',RP+'.rack')}${F('Rack height (U)',RP+'.size',{num:1})}</div>
+      <b style="font-size:12px;color:var(--muted)">Devices in rack — U is the lowest unit the device sits on</b>
+      ${r.devices.map((d,di)=>`<div class="row-line dev">${F('Name',`${RP}.devices.${di}.name`)}${F('U',`${RP}.devices.${di}.u`,{num:1})}${F('Height U',`${RP}.devices.${di}.h`,{num:1})}<button class="x" data-act="dDel" data-i="${ri}" data-j="${di}" title="Remove device">×</button></div>`).join('')}
+      <div class="sub-h"><button class="btn sm" data-act="dAdd" data-i="${ri}">+ Device</button></div>
+      ${w.map(x=>`<span class="warn">${esc(x)}</span>`).join('')}
+      <b style="font-size:12px;color:var(--muted)">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet — จำนวนแหล่งจ่าย ${r.power.length} แหล่ง</b>
+      ${r.power.map((p,pi)=>`<div class="row-line">${F('แหล่งที่ '+(pi+1),`${RP}.power.${pi}`)}<button class="x" data-act="pDel" data-i="${ri}" data-j="${pi}" title="Remove source">×</button></div>`).join('')}
+      <div class="sub-h"><button class="btn sm" data-act="pAdd" data-i="${ri}">+ Power source</button></div>
+      <b style="font-size:12px;color:var(--muted)">ระยะและแนวการเดินสายสัญญาณ — one cable run per line</b>
+      ${r.cables.map((c,ci)=>`<div class="row-line cab">${F('Cable type',`${RP}.cables.${ci}.type`)}${F('Runs',`${RP}.cables.${ci}.text`,{area:1,rows:2,ph:'สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น'})}<button class="x" data-act="cDel" data-i="${ri}" data-j="${ci}" title="Remove cable">×</button></div>`).join('')}
+      <div class="sub-h"><button class="btn sm" data-act="cAdd" data-i="${ri}">+ Cable type</button></div>
+    </div>`});
+  h+=`<div class="sub-h"><button class="btn primary" data-act="rAdd">+ Add rack</button></div></div></details>`;
+
+  h+=`<details class="card" open><summary><span class="num">4</span><h3>แผนภาพการเชื่อมต่ออุปกรณ์ระบบ</h3><span class="hint">Connection diagram</span></summary><div class="body">
+    <div class="imgdrop">${s.diagram.img?`<img src="${s.diagram.img}" alt="Connection diagram">`:'No diagram yet. Upload a PNG or JPG exported from Visio, draw.io or PowerPoint.'}
+      <div class="sub-h" style="justify-content:center;margin-top:6px"><label class="btn sm">${s.diagram.img?'Replace image':'Upload diagram'}<input type="file" accept="image/*" data-img="diagram" hidden></label>${s.diagram.img?`<button class="btn sm danger" data-act="rmDiag">Remove</button>`:''}</div></div>
+    ${F('Caption / notes',P+'.diagram.caption',{area:1})}
+  </div></details>`;
+  document.getElementById('editor').innerHTML=h;
+}
+function confirmBtn(act,label,i){return `<button class="btn sm danger" data-confirm="${act}" ${i!=null?`data-i="${i}"`:''}>${label}</button>`}
+
+/* ---------- document preview ---------- */
+function logoSrc(){return S.doc.logo===null||S.doc.logo===undefined?APJC_LOGO:S.doc.logo}
+function logoHTML(){const L=logoSrc();return `<div class="logo">${L?`<img src="${L}" alt="logo">`:`<span class="lt">${esc(S.doc.logoText||'')}</span>`}</div>`}
+const kv=(k,v)=>`<tr><td class="k">${esc(k)}</td><td>${esc(v).replace(/\n/g,'<br>')}</td></tr>`;
+function siteHTML(s){
+  let p1=`<div class="page">${logoHTML()}<h2>${esc(s.name)}</h2><h5>1.&nbsp; ข้อมูลเกี่ยวกับการสำรวจพื้นที่</h5>
+    <table class="t">${kv('ชื่อหน่วยงาน',s.info.agency)}${kv('สถานที่/ที่อยู่',s.info.location)}${kv('วัน-เวลาที่สำรวจ',s.info.datetime)}<tr><td class="k" style="height:38px">ผู้เข้าสำรวจพื้นที่</td><td>${esc(s.info.surveyors).replace(/\n/g,'<br>')}</td></tr></table>
+    <h5>2.&nbsp; ข้อมูลสถานที่ติดตั้ง</h5>
+    <table class="t"><tr><td colspan="2" class="hd">สถานที่ติดตั้งอุปกรณ์ ${esc(s.place.equipment)}</td></tr>${kv('ชื่ออาคาร/ชั้น',s.place.building)}${kv('ที่อยู่',s.place.address)}${kv('ห้อง/หมายเลขตู้',s.place.racks)}
+    <tr><td colspan="2" class="hd">แผนผังห้องโดยสังเขป</td></tr><tr><td colspan="2" class="fig">${floorSVG(s.floor,false)}</td></tr></table></div>`;
+  let p3=s.racks.map((r,i)=>`<div class="page">${logoHTML()}${i===0?`<h5>3.&nbsp; ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ</h5>`:''}
+    <table class="t"><tr><td colspan="2"><b>ข้อมูลจุดติดตั้ง ${esc(r.device)} ในตู้</b> ${esc(r.rack)}</td></tr>${kv('ห้อง/หมายเลขตู้',r.rack)}${kv('จำนวน Unit',unitsOf(r)+' Unit')}${kv('หมายเลข Unit',uLabel(r))}
+    <tr><td colspan="2" class="fig">${rackSVG(r)}</td></tr>
+    <tr><td colspan="2" class="hd">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack</td></tr>${kv('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}${r.power.map((p,j)=>kv('แหล่งที่ '+(j+1),p)).join('')}
+    <tr><td colspan="2" class="hd">ระยะและแนวการเดินสายสัญญาณ</td></tr>${r.cables.map(c=>`<tr><td class="k">${esc(c.type)}</td><td>${(c.text||'').split('\n').map(l=>`<span class="ln">${esc(l)}</span>`).join('')}</td></tr>`).join('')}</table></div>`).join('');
+  let p4=`<div class="page">${logoHTML()}<h5>4.&nbsp; แผนภาพการเชื่อมต่ออุปกรณ์ระบบ</h5><div class="diagram">${s.diagram.img?`<img src="${s.diagram.img}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`;
+  return p1+p3+p4;
+}
+const SECS=['ข้อมูลเกี่ยวกับการสำรวจพื้นที่','ข้อมูลสถานที่ติดตั้ง','ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ','แผนภาพการเชื่อมต่ออุปกรณ์ระบบ'];
+function docHTML(){
+  let h=`<div class="page cover">${logoHTML()}<hr><h1>${esc(S.doc.title)}</h1><hr><div class="co">${esc(S.doc.company)}</div>
+    <div class="sc">ขอบเขตการสำรวจ<br>${S.sites.map(s=>'— '+esc(s.name)).join('<br>')}</div></div>`;
+  // page numbers follow the layout above: cover=1, toc=2, then per site 1 + racks + 1
+  let pg=3,toc='';
+  S.sites.forEach(s=>{const p1=pg,p3=pg+1,p4=pg+1+s.racks.length;
+    toc+=`<div class="e"><span>${esc(s.name)}</span><span>${p1}</span></div>`+[p1,p1,p3,p4].map((n,i)=>`<div class="e s"><span>${i+1}.&nbsp; ${SECS[i]}</span><span>${n}</span></div>`).join('');
+    pg=p4+1});
+  h+=`<div class="page toc">${logoHTML()}<h4>สารบัญ</h4>${toc}</div>`;
+  h+=S.sites.map(siteHTML).join('');
+  return {h,pages:pg-1};
+}
+function renderDoc(){const d=docHTML();document.getElementById('doc').innerHTML=d.h;
+  document.getElementById('pvMeta').textContent=`${d.pages} pages · ${S.sites.length} sites`;
+  document.getElementById('docName').textContent=S.doc.title||'Site Survey';}
+function renderAll(){renderTabs();renderEditor();renderDoc()}
+
+/* ---------- markdown export ---------- */
+function toMarkdown(){
+  const row=(k,v)=>`| ${k} | ${String(v??'').replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
+  let m=`# ${S.doc.title}\n\n${S.doc.company}\n\n**ขอบเขตการสำรวจ**\n\n${S.sites.map(s=>'- '+s.name).join('\n')}\n`;
+  S.sites.forEach(s=>{
+    m+=`\n---\n\n## ${s.name}\n\n### 1. ${SECS[0]}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ชื่อหน่วยงาน',s.info.agency),row('สถานที่/ที่อยู่',s.info.location),row('วัน-เวลาที่สำรวจ',s.info.datetime),row('ผู้เข้าสำรวจพื้นที่',s.info.surveyors)].join('\n')}\n`;
+    m+=`\n### 2. ${SECS[1]}\n\n**สถานที่ติดตั้งอุปกรณ์** ${s.place.equipment}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ชื่ออาคาร/ชั้น',s.place.building),row('ที่อยู่',s.place.address),row('ห้อง/หมายเลขตู้',s.place.racks)].join('\n')}\n\n**แผนผังห้องโดยสังเขป** (${s.floor.orient==='v'?'แนวตั้ง':'แนวนอน'}; [x] = ตู้ที่ติดตั้ง)\n\n`;
+    s.floor.items.forEach(it=>{m+=it.type==='label'?`- _${it.text}_\n`:`- ${it.racks.map(r=>r.n?(r.on?`[${r.n}]`:r.n):'·').join(' | ')}\n`});
+    m+=`\n### 3. ${SECS[2]}\n`;
+    s.racks.forEach(r=>{
+      m+=`\n#### ข้อมูลจุดติดตั้ง ${r.device} ในตู้ ${r.rack}\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${[row('ห้อง/หมายเลขตู้',r.rack),row('จำนวน Unit',unitsOf(r)+' Unit'),row('หมายเลข Unit',uLabel(r)),row('ขนาดตู้',r.size+'U')].join('\n')}\n`;
+      m+=`\nอุปกรณ์ในตู้: ${r.devices.map(d=>`${d.name} @ U${d.u}${+d.h>1?`–${+d.u+ +d.h-1}`:''}`).join(', ')}\n`;
+      m+=`\n**ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack**\n\n| หัวข้อ | รายละเอียด |\n|---|---|\n${row('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}\n${r.power.map((p,j)=>row('แหล่งที่ '+(j+1),p)).join('\n')}\n`;
+      m+=`\n**ระยะและแนวการเดินสายสัญญาณ**\n\n| สาย | รายละเอียด |\n|---|---|\n${r.cables.map(c=>row(c.type,c.text)).join('\n')}\n`});
+    m+=`\n### 4. ${SECS[3]}\n\n${s.diagram.img?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${s.diagram.caption}`:''}\n`;
+  });
+  return m;
+}
+
+/* ---------- copy for Word: rasterise SVGs, put rich HTML on clipboard ---------- */
+function svgToPng(svgEl){return new Promise(res=>{
+  const xml=new XMLSerializer().serializeToString(svgEl);const vb=svgEl.viewBox.baseVal;const sc=2;
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=vb.width*sc;c.height=vb.height*sc;
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
+    res({src:c.toDataURL('image/png'),w:vb.width,h:vb.height})};img.onerror=()=>res(null);
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml)})}
+async function copyWord(){
+  const src=document.getElementById('doc').cloneNode(true);
+  const live=[...document.querySelectorAll('#doc svg')],clones=[...src.querySelectorAll('svg')];
+  for(let i=0;i<live.length;i++){const p=await svgToPng(live[i]);if(p){const im=document.createElement('img');im.src=p.src;im.width=p.w;im.height=p.h;clones[i].replaceWith(im)}}
+  src.querySelectorAll('.page').forEach((pg,i)=>{pg.style.cssText='font-family:Sarabun,Tahoma,sans-serif;font-size:11pt;'+(i?'page-break-before:always;':'');});
+  src.querySelectorAll('table').forEach(t=>{t.setAttribute('border','1');t.style.cssText='border-collapse:collapse;width:100%;'});
+  src.querySelectorAll('td').forEach(td=>{td.style.cssText+='border:1px solid #3A3A3A;padding:3px 7px;vertical-align:top;'});
+  src.querySelectorAll('h1,h2').forEach(h=>h.style.color='#1A5E80');
+  const html=`<html><body>${src.innerHTML}</body></html>`;
+  try{await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([toMarkdown()],{type:'text/plain'})})]);toast('Copied — paste into Word with Ctrl+V')}
+  catch(e){const box=document.createElement('div');box.contentEditable='true';box.style.cssText='position:fixed;left:-9999px;top:0;background:#fff;color:#000';box.innerHTML=src.innerHTML;document.body.appendChild(box);
+    const r=document.createRange();r.selectNodeContents(box);const sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+    let ok=false;try{ok=document.execCommand('copy')}catch(_){}
+    sel.removeAllRanges();box.remove();toast(ok?'Copied — paste into Word with Ctrl+V':'Copy was blocked here. Select the preview and press Ctrl+C.')}
+}
+
+/* ---------- modals & toast ---------- */
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
+function modal(title,body,btns){const root=document.getElementById('modalRoot');
+  root.innerHTML=`<div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-card"><header><h3>${esc(title)}</h3>${btns||''}<button class="x" data-close aria-label="Close">×</button></header><div class="mb">${body}</div></div></div>`;
+  root.querySelector('[data-close]').onclick=()=>root.innerHTML='';root.querySelector('.modal').addEventListener('click',e=>{if(e.target.classList.contains('modal'))root.innerHTML=''});}
+async function copyText(t,ta){try{await navigator.clipboard.writeText(t);toast('Copied')}catch(e){if(ta){ta.focus();ta.select();toast('Press Ctrl+C to copy the selected text')}}}
+
+document.getElementById('bMd').onclick=()=>{const md=toMarkdown();modal('Markdown',`<p class="note">Paste into a .md file, Notion, Confluence or a chat.</p><textarea id="mdOut" readonly>${esc(md)}</textarea>`,`<button class="btn sm primary" id="mdCopy">Copy</button>`);
+  document.getElementById('mdCopy').onclick=()=>copyText(md,document.getElementById('mdOut'))};
+document.getElementById('bWord').onclick=copyWord;
+document.getElementById('bJson').onclick=()=>{const js=JSON.stringify(S,null,1);
+  modal('Save / load JSON',`<p class="note">Copy this text into a .json file to keep the draft or send it to a colleague. To load, choose a .json file or paste the text and press Load.</p>
+    <textarea id="jsOut">${esc(js)}</textarea><div class="sub-h"><label class="btn sm">Choose .json file<input type="file" accept=".json,application/json" id="jsFile" hidden></label><span class="grow"></span><span class="warn" id="jsErr"></span></div>`,
+    `<button class="btn sm" id="jsCopy">Copy</button><button class="btn sm primary" id="jsLoad">Load</button>`);
+  const ta=document.getElementById('jsOut');
+  document.getElementById('jsCopy').onclick=()=>copyText(ta.value,ta);
+  document.getElementById('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
+  document.getElementById('jsLoad').onclick=()=>{try{const o=JSON.parse(ta.value);if(!o.sites||!o.doc)throw 0;S=o;S.cur=0;save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Draft loaded')}
+    catch(e){document.getElementById('jsErr').textContent='This is not a survey JSON. Check that you copied the whole text.'}};
+};
+document.getElementById('bReset').onclick=()=>modal('Reset',`<p>Choose what to start from. Your current draft in this browser will be replaced.</p>
+  <div class="sub-h"><button class="btn primary" id="rsSample">NT sample (Sriracha + Bangkok)</button><button class="btn" id="rsBlank">One blank site</button></div>`);
+document.getElementById('modalRoot').addEventListener('click',e=>{
+  if(e.target.id==='rsSample'){S=sample()}else if(e.target.id==='rsBlank'){S={doc:{...S.doc,title:'Site Survey'},sites:[blankSite(1)],cur:0}}else return;
+  save();renderAll();document.getElementById('modalRoot').innerHTML='';toast('Reset done')});
+
+/* ---------- editor events ---------- */
+const ed=document.getElementById('editor');
+let liveT;
+ed.addEventListener('input',e=>{const t=e.target;
+  if(t.dataset.b){let v=t.value;if(t.type==='number')v=v===''?'':Math.max(1,parseInt(v,10)||1);setP(S,t.dataset.b,v);save();
+    clearTimeout(liveT);liveT=setTimeout(()=>{renderDoc();if(/\.name$/.test(t.dataset.b)&&t.dataset.b.split('.').length===3)renderTabs();
+      if(t.tagName==='SELECT'||/floor\./.test(t.dataset.b)){document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true)}},150)}
+  if(t.dataset.frow!=null){const it=site().floor.items[+t.dataset.frow];const old=it.racks;const names=t.value.split(',').map(x=>x.trim());
+    it.racks=names.map((n,k)=>({n,on:!!(old.find(o=>o.n&&o.n===n)||{}).on}));save();
+    document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}
+});
+ed.addEventListener('change',e=>{const t=e.target;
+  if(t.dataset.b&&(t.tagName==='SELECT'||t.type==='number')){renderEditor();renderDoc()}
+  if(t.dataset.fitype!=null){const i=+t.dataset.fitype,it=site().floor.items[i];
+    site().floor.items[i]=t.value==='row'?{id:it.id,type:'row',racks:[R('A1')]}:{id:it.id,type:'label',text:'Front'};save();renderEditor();renderDoc()}
+  if(t.dataset.img){const f=t.files[0];if(!f)return;shrink(f,t.dataset.img==='logo'?400:1600).then(url=>{
+    if(t.dataset.img==='logo')S.doc.logo=url;else site().diagram.img=url;save();renderEditor();renderDoc()})}
+});
+function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+  const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);res(c.toDataURL(file.type==='image/png'?'image/png':'image/jpeg',.88))};im.src=r.result};r.readAsDataURL(file)})}
+
+const mv=(a,i,d)=>{const j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]]};
+ed.addEventListener('click',e=>{
+  const tog=e.target.closest('[data-tog]');
+  if(tog){const [i,j]=tog.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];if(rk.n){rk.on=!rk.on;save();document.getElementById('floorEd').innerHTML=floorSVG(site().floor,true);renderDoc()}return}
+  const cb=e.target.closest('[data-confirm]');
+  if(cb){if(cb.dataset.armed){act(cb.dataset.confirm,+cb.dataset.i)}else{cb.dataset.armed='1';cb.textContent='Click again to delete';setTimeout(()=>{if(cb.isConnected){delete cb.dataset.armed;cb.textContent=cb.dataset.confirm==='delSite'?'Delete site':'Delete'}},3000)}return}
+  const b=e.target.closest('[data-act]');if(!b)return;act(b.dataset.act,+b.dataset.i,+b.dataset.j);
+});
+document.getElementById('tabs').addEventListener('click',e=>{
+  const x=e.target.closest('[data-tabx]');
+  if(x){const i=+x.dataset.tabx;
+    if(x.dataset.armed){S.sites.splice(i,1);if(S.cur>i||S.cur>=S.sites.length)S.cur=Math.max(0,S.cur-1);save();renderAll();toast('Site deleted');return}
+    x.dataset.armed='1';x.textContent='Delete?';x.classList.add('armed');
+    setTimeout(()=>{if(x.isConnected){delete x.dataset.armed;x.textContent='×';x.classList.remove('armed')}},3000);return}
+  const t=e.target.closest('[data-tab]');if(t){S.cur=+t.dataset.tab;save();renderAll();return}
+  if(e.target.closest('[data-act="addSite"]'))act('addSite')});
+function act(a,i,j){const s=site(),fl=s.floor.items;
+  switch(a){
+    case 'addSite':S.sites.push(blankSite(S.sites.length+1));S.cur=S.sites.length-1;break;
+    case 'dupSite':S.sites.splice(S.cur+1,0,cloneSite(s));S.cur++;toast('Copy created — rename it and edit the racks');break;
+    case 'delSite':if(S.sites.length===1){toast('A document needs at least one site');return}S.sites.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);break;
+    case 'moveL':if(S.cur>0){mv(S.sites,S.cur,-1);S.cur--}break;
+    case 'moveR':if(S.cur<S.sites.length-1){mv(S.sites,S.cur,1);S.cur++}break;
+    case 'rmLogo':S.doc.logo='';break;
+    case 'apjcLogo':S.doc.logo=null;break;
+    case 'rmDiag':s.diagram.img=null;break;
+    case 'fUp':mv(fl,i,-1);break; case 'fDn':mv(fl,i,1);break; case 'fDel':fl.splice(i,1);break;
+    case 'fAddRow':fl.push({id:uid(),type:'row',racks:[R('A1'),R('A2'),R('A3')]});break;
+    case 'fAddLbl':fl.push({id:uid(),type:'label',text:'Front'});break;
+    case 'rAdd':s.racks.push(blankRack());break;
+    case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();s.racks.splice(i+1,0,c);break}
+    case 'rDel':s.racks.splice(i,1);break;
+    case 'rUp':mv(s.racks,i,-1);break; case 'rDn':mv(s.racks,i,1);break;
+    case 'dAdd':{const r=s.racks[i];const top=r.devices.reduce((m,d)=>Math.max(m,(+d.u||0)+(+d.h||1)),0);r.devices.push({id:uid(),name:'',u:Math.min(top||21,r.size),h:1});break}
+    case 'dDel':s.racks[i].devices.splice(j,1);break;
+    case 'pAdd':s.racks[i].power.push('มีเพียงพอต่อการใช้งาน C12-C13');break;
+    case 'pDel':s.racks[i].power.splice(j,1);break;
+    case 'cAdd':s.racks[i].cables.push({id:uid(),type:'สาย ',text:''});break;
+    case 'cDel':s.racks[i].cables.splice(j,1);break;
+    default:return;
+  }
+  save();renderAll();
+}
+/* ---------- save helper: claude downloads capability when hosted, plain link when offline ---------- */
+async function saveFile(name,data,mime){
+  if(window.claude&&window.claude.use){
+    try{const d=await window.claude.use('downloads');
+      if(d){try{await d.save({filename:name,data});toast('Saved '+name)}catch(e){if(e&&e.code!=='declined')toast('Could not save: '+(e.message||e.code))}return}}catch(_){}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type:mime||'application/octet-stream'}));a.download=name;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
+
+/* ---------- minimal ZIP writer (stored, no compression) ---------- */
+const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zipFiles(files){
+  const enc=new TextEncoder(),parts=[],central=[];let off=0;
+  files.forEach(f=>{const name=enc.encode(f.name),data=typeof f.data==='string'?enc.encode(f.data):f.data,crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,0,true);h.setUint16(10,0,true);h.setUint16(12,0x21,true);
+    h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,name.length,true);h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),name,data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint16(10,0,true);c.setUint16(12,0,true);c.setUint16(14,0x21,true);
+    c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,name.length,true);
+    c.setUint32(42,off,true);central.push(new Uint8Array(c.buffer),name);
+    off+=30+name.length+data.length});
+  const cdSize=central.reduce((a,b)=>a+b.length,0),e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdSize,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+
+/* ---------- images ---------- */
+function dataUrlBytes(u){const [h,b]=u.split(',');const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
+  return {bytes:a,ext:/image\/png/.test(h)?'png':'jpeg'}}
+function imgSize(u){return new Promise(r=>{const i=new Image();i.onload=()=>r({w:i.naturalWidth,h:i.naturalHeight});i.onerror=()=>r({w:400,h:300});i.src=u})}
+function svgStrToPng(str,scale=2){return new Promise(res=>{
+  const m=str.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);const w=+m[1],h=+m[2];
+  const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=Math.round(w*scale);c.height=Math.round(h*scale);
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);res({url:c.toDataURL('image/png'),w,h})};
+  img.onerror=()=>res(null);img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(str)})}
+
+/* ---------- Word (.docx) builder ---------- */
+async function buildDocx(){
+  const FONT='Leelawadee UI',TEAL='1A5E80',W=9638; // A4, 2 cm margins → usable width in twips
+  const media=[];let pid=1;
+  const addMedia=(u)=>{const {bytes,ext}=dataUrlBytes(u);const n=media.length+1;const m={file:`image${n}.${ext}`,bytes,ext,rid:'rIdImg'+n};media.push(m);return m};
+  const pic=(rid,wpx,hpx,maxPx)=>{const k=Math.min(1,maxPx/wpx);const cx=Math.round(wpx*k*9525),cy=Math.round(hpx*k*9525);const id=pid++;
+    return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="Picture ${id}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="img${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`};
+  const rpr=o=>`<w:rPr>${o.b?'<w:b/><w:bCs/>':''}${o.color?`<w:color w:val="${o.color}"/>`:''}${o.sz?`<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>`:''}</w:rPr>`;
+  const run=(t,o={})=>String(t??'').split('\n').map(l=>`<w:r>${rpr(o)}<w:t xml:space="preserve">${esc(l)}</w:t></w:r>`).join('<w:r><w:br/></w:r>');
+  const para=(inner,o={})=>`<w:p><w:pPr>${o.style?`<w:pStyle w:val="${o.style}"/>`:''}${o.pb?'<w:pageBreakBefore/>':''}${o.keep?'<w:keepNext/>':''}${o.border?`<w:pBdr><w:top w:val="single" w:sz="12" w:space="8" w:color="${TEAL}"/><w:bottom w:val="single" w:sz="12" w:space="8" w:color="${TEAL}"/></w:pBdr>`:''}${o.tabs?`<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${W}"/></w:tabs>`:''}<w:spacing w:before="${o.before||0}" w:after="${o.after??80}"/>${o.ind?`<w:ind w:left="${o.ind}"/>`:''}${o.align?`<w:jc w:val="${o.align}"/>`:''}</w:pPr>${inner}</w:p>`;
+  const K=3500,V=W-K;
+  const cell=(inner,o={})=>`<w:tc><w:tcPr><w:tcW w:w="${o.w||(o.span?W:V)}" w:type="dxa"/>${o.span?'<w:gridSpan w:val="2"/>':''}</w:tcPr>${inner||'<w:p/>'}</w:tc>`;
+  const cp=(inner,o={})=>`<w:p><w:pPr><w:spacing w:before="20" w:after="20"/>${o.align?`<w:jc w:val="${o.align}"/>`:''}</w:pPr>${inner}</w:p>`;
+  const tr=cells=>`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`;
+  const kvr=(k,v)=>tr(cell(cp(run(k)),{w:K})+cell(cp(run(v))));
+  const span=(inner,align)=>tr(cell(cp(inner,{align}),{span:1}));
+  const tbl=rows=>`<w:tbl><w:tblPr><w:tblW w:w="${W}" w:type="dxa"/><w:tblBorders>${['top','left','bottom','right','insideH','insideV'].map(s=>`<w:${s} w:val="single" w:sz="4" w:space="0" w:color="3A3A3A"/>`).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="${K}"/><w:gridCol w:w="${V}"/></w:tblGrid>${rows.join('')}</w:tbl>${para('',{after:0})}`;
+
+  let b='';
+  // cover
+  b+=para('',{before:3600})+para(run(S.doc.title,{sz:64,color:TEAL}),{border:1,before:0,after:300});
+  b+=para(run(S.doc.company,{sz:26}),{after:400});
+  b+=para(run('ขอบเขตการสำรวจ',{sz:18}),{after:40})+S.sites.map(s=>para(run('— '+s.name,{sz:18}),{after:20})).join('');
+  // TOC: page numbers follow the one-section-per-page layout
+  b+=para(run('สารบัญ',{b:1,sz:26}),{pb:1,align:'center',after:200});
+  let pg=3,toc='';
+  S.sites.forEach(s=>{const p3=pg+1,p4=pg+1+s.racks.length;
+    toc+=para(run(s.name)+'<w:r><w:tab/></w:r>'+run(pg),{tabs:1,after:40});
+    [pg,pg,p3,p4].forEach((n,i)=>{toc+=para(run(`${i+1}.  ${SECS[i]}`,{b:1})+'<w:r><w:tab/></w:r>'+run(n),{tabs:1,ind:360,after:40})});pg=p4+1});
+  b+=toc;
+  for(const s of S.sites){
+    b+=para(run(s.name,{sz:34,color:TEAL}),{style:'Heading1',pb:1,after:200});
+    b+=para(run('1.  '+SECS[0],{b:1,sz:24}),{style:'Heading2',keep:1,before:120,after:120});
+    b+=tbl([kvr('ชื่อหน่วยงาน',s.info.agency),kvr('สถานที่/ที่อยู่',s.info.location),kvr('วัน-เวลาที่สำรวจ',s.info.datetime),kvr('ผู้เข้าสำรวจพื้นที่',s.info.surveyors||' ')]);
+    b+=para(run('2.  '+SECS[1],{b:1,sz:24}),{style:'Heading2',keep:1,before:200,after:120});
+    const fp=await svgStrToPng(floorSVG(s.floor,false));let fimg='';
+    if(fp){const m=addMedia(fp.url);fimg=pic(m.rid,fp.w,fp.h,560)}
+    b+=tbl([span(run('สถานที่ติดตั้งอุปกรณ์ '+s.place.equipment,{b:1})),kvr('ชื่ออาคาร/ชั้น',s.place.building),kvr('ที่อยู่',s.place.address),kvr('ห้อง/หมายเลขตู้',s.place.racks),span(run('แผนผังห้องโดยสังเขป',{b:1})),span(fimg,'center')]);
+    for(let i=0;i<s.racks.length;i++){const r=s.racks[i];
+      b+=para(i===0?run('3.  '+SECS[2],{b:1,sz:24}):'',{style:i===0?'Heading2':null,pb:1,keep:1,after:120});
+      const rp=await svgStrToPng(rackSVG(r));let rimg='';if(rp){const m=addMedia(rp.url);rimg=pic(m.rid,rp.w,rp.h,420)}
+      b+=tbl([span(run(`ข้อมูลจุดติดตั้ง ${r.device} ในตู้ `,{b:1})+run(r.rack)),kvr('ห้อง/หมายเลขตู้',r.rack),kvr('จำนวน Unit',unitsOf(r)+' Unit'),kvr('หมายเลข Unit',uLabel(r)),span(rimg,'center'),
+        span(run('ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack',{b:1})),kvr('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง'),...r.power.map((p,j)=>kvr('แหล่งที่ '+(j+1),p)),
+        span(run('ระยะและแนวการเดินสายสัญญาณ',{b:1})),...r.cables.map(c=>kvr(c.type,c.text))]);
+    }
+    b+=para(run('4.  '+SECS[3],{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
+    if(s.diagram.img){const sz=await imgSize(s.diagram.img);const m=addMedia(s.diagram.img);b+=para(pic(m.rid,sz.w,sz.h,640),{align:'center'})}
+    else b+=para(run('(แนบแผนภาพการเชื่อมต่อ)',{color:'888888'}),{align:'center'});
+    if(s.diagram.caption)b+=para(run(s.diagram.caption,{sz:18}),{align:'center'});
+  }
+  // header logo
+  const L=logoSrc();let hdr='';
+  if(L){const sz=await imgSize(L);const {bytes,ext}=dataUrlBytes(L);media.push({file:'logo.'+ext,bytes,ext,rid:'rIdLogo',header:1});
+    const h=40,w=Math.round(sz.w*h/sz.h);hdr=para(pic('rIdLogo',w,h,w),{align:'right',after:0})}
+  else hdr=para(run(S.doc.logoText||'',{b:1,color:TEAL,sz:28}),{align:'right',after:0});
+
+  const NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
+  const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const docXml=`${X}<w:document ${NS}><w:body>${b}<w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1418" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const hdrXml=`${X}<w:hdr ${NS}>${hdr}</w:hdr>`;
+  const styles=`${X}<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${FONT}" w:hAnsi="${FONT}" w:eastAsia="${FONT}" w:cs="${FONT}"/><w:sz w:val="21"/><w:szCs w:val="21"/><w:lang w:val="en-US" w:bidi="th-TH"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr></w:style>
+<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblCellMar><w:left w:w="108" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`;
+  const R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const docRels=`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="${R}/styles" Target="styles.xml"/><Relationship Id="rIdHdr" Type="${R}/header" Target="header1.xml"/>${media.filter(m=>!m.header).map(m=>`<Relationship Id="${m.rid}" Type="${R}/image" Target="media/${m.file}"/>`).join('')}</Relationships>`;
+  const hdrRels=`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${media.filter(m=>m.header).map(m=>`<Relationship Id="${m.rid}" Type="${R}/image" Target="media/${m.file}"/>`).join('')}</Relationships>`;
+  const ct=`${X}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`;
+  const rootRels=`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`;
+  const core=`${X}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${esc(S.doc.title)}</dc:title><dc:creator>Rack Site Survey Editor</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().slice(0,19)}Z</dcterms:created></cp:coreProperties>`;
+  return zipFiles([{name:'[Content_Types].xml',data:ct},{name:'_rels/.rels',data:rootRels},{name:'docProps/core.xml',data:core},{name:'word/document.xml',data:docXml},
+    {name:'word/styles.xml',data:styles},{name:'word/header1.xml',data:hdrXml},{name:'word/_rels/document.xml.rels',data:docRels},{name:'word/_rels/header1.xml.rels',data:hdrRels},
+    ...media.map(m=>({name:'word/media/'+m.file,data:m.bytes}))]);
+}
+const fileBase=()=>(S.doc.title||'Site Survey').replace(/[\\/:*?"<>|]+/g,' ').trim()+' '+new Date().toISOString().slice(0,10);
+document.getElementById('bDocx').onclick=async e=>{const btn=e.currentTarget;btn.disabled=true;const t=btn.textContent;btn.textContent='Building…';
+  try{const blob=await buildDocx();await saveFile(fileBase()+'.docx',blob,blob.type)}catch(err){toast('Could not build the Word file: '+err.message)}
+  btn.disabled=false;btn.textContent=t};
+
+document.getElementById('bDl').onclick=()=>saveFile(fileBase()+'.json',JSON.stringify(S,null,1),'application/json');
+
+renderAll();
+})();
+</script>

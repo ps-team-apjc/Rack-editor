@@ -1,0 +1,8 @@
+# test/export outputs
+out.docx
+*.docx
+*.pdf
+node_modules/
+# secrets
+env.txt
+.env*

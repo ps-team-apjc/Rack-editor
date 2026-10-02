@@ -1,0 +1,407 @@
+{
+ "doc": {
+  "title": "Site Survey",
+  "company": "National Telecom Public Company Limited",
+  "logoText": "APJC",
+  "logo": null
+ },
+ "sites": [
+  {
+   "id": "0d7lkhi",
+   "name": "NT Data Center Sriracha",
+   "info": {
+    "agency": "NTDC",
+    "location": "NT Data Center Sriracha",
+    "datetime": "วันพุธที่ 8 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.",
+    "surveyors": ""
+   },
+   "place": {
+    "equipment": "NetScaler MPX9200, H3C Server",
+    "building": "Eastern Economic Telecommunication Center ชั้นที่ 3",
+    "address": "Eastern Economic Telecommunication Cent Sriracha",
+    "racks": "Rack G-1, G-3, G-5"
+   },
+   "floor": {
+    "orient": "h",
+    "door": "center",
+    "items": [
+     {
+      "id": "1s07f2z",
+      "type": "label",
+      "text": "Rear"
+     },
+     {
+      "id": "i0gjkzc",
+      "type": "row",
+      "racks": [
+       {
+        "n": "G1",
+        "on": true
+       },
+       {
+        "n": "G3",
+        "on": true
+       },
+       {
+        "n": "G5",
+        "on": true
+       }
+      ]
+     },
+     {
+      "id": "f4ael00",
+      "type": "label",
+      "text": "Front"
+     },
+     {
+      "id": "zymht05",
+      "type": "row",
+      "racks": [
+       {
+        "n": "G2",
+        "on": false
+       },
+       {
+        "n": "G4",
+        "on": false
+       },
+       {
+        "n": "G6",
+        "on": false
+       }
+      ]
+     },
+     {
+      "id": "80xw37k",
+      "type": "label",
+      "text": "Rear"
+     }
+    ]
+   },
+   "racks": [
+    {
+     "id": "j437g7m",
+     "device": "MPX9200",
+     "rack": "Rack G3",
+     "size": 42,
+     "devices": [
+      {
+       "id": "t5ar2tr",
+       "name": "NetScaler MPX9200",
+       "u": 21,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน C12-C13",
+      "มีเพียงพอต่อการใช้งาน C12-C13"
+     ],
+     "cables": [
+      {
+       "id": "uuu11x0",
+       "type": "สาย LOM RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "c7xviy9",
+       "type": "สาย Management RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "1iyb8cz",
+       "type": "สาย Fiber OM3/4 Patch Cord",
+       "text": "สาย Fiber เชื่อมต่อ Switch ภายในตู้ 3 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack G5 7 เมตร จำนวน 2 เส้น"
+      }
+     ]
+    },
+    {
+     "id": "804pnbo",
+     "device": "MPX9200",
+     "rack": "Rack G5",
+     "size": 42,
+     "devices": [
+      {
+       "id": "6oc44ny",
+       "name": "NetScaler MPX9200",
+       "u": 21,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน C12-C13",
+      "มีเพียงพอต่อการใช้งาน C12-C13"
+     ],
+     "cables": [
+      {
+       "id": "hlrtvy2",
+       "type": "สาย LAN RJ45 สำหรับ LOM",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "mewa0v3",
+       "type": "สาย Management RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 1.5 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "5mmw5n5",
+       "type": "สาย Fiber OM3/4 Patch Cord",
+       "text": "สาย Fiber เชื่อมต่อ Switch ภายในตู้ 3 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack G3 7 เมตร จำนวน 2 เส้น"
+      }
+     ]
+    },
+    {
+     "id": "macznyt",
+     "device": "H3C Server",
+     "rack": "Rack G1",
+     "size": 42,
+     "devices": [
+      {
+       "id": "35tew7f",
+       "name": "H3C Server",
+       "u": 27,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน C12-C13",
+      "มีเพียงพอต่อการใช้งาน C12-C13"
+     ],
+     "cables": [
+      {
+       "id": "grdrzbc",
+       "type": "สาย LAN RJ45",
+       "text": "สาย Lan เชื่อมต่อ Switch ข้ามตู้ไป Rack G3 7 เมตร จำนวน 3 เส้น"
+      }
+     ]
+    }
+   ],
+   "diagram": {
+    "img": null,
+    "caption": "Existing SRI FL3 / New SRIRACHA FL3 — All Connectivity = 10G-SR"
+   }
+  },
+  {
+   "id": "co06egk",
+   "name": "NT Data Center Bangkok",
+   "info": {
+    "agency": "NTDC",
+    "location": "NT Data Center Bangkok",
+    "datetime": "วันพุธที่ 9 กรกฏาคม 2569 เวลา 11:00 – 12:00 น.",
+    "surveyors": ""
+   },
+   "place": {
+    "equipment": "NetScaler MPX9200, H3C Server",
+    "building": "NT HQ Bangkok Tower 4 Floor 4",
+    "address": "NT HQ Bangkok",
+    "racks": "Rack 09, Rack 10, Rack N-A08"
+   },
+   "floor": {
+    "orient": "v",
+    "door": "center",
+    "items": [
+     {
+      "id": "ipz9i8a",
+      "type": "label",
+      "text": "Front"
+     },
+     {
+      "id": "vyo0lyn",
+      "type": "row",
+      "racks": [
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "10",
+        "on": true
+       },
+       {
+        "n": "09",
+        "on": true
+       },
+       {
+        "n": "",
+        "on": false
+       }
+      ]
+     },
+     {
+      "id": "qt6olwt",
+      "type": "label",
+      "text": "Rear"
+     },
+     {
+      "id": "yoxn4xg",
+      "type": "row",
+      "racks": [
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "N-A08",
+        "on": true
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       },
+       {
+        "n": "03",
+        "on": false
+       },
+       {
+        "n": "02",
+        "on": false
+       },
+       {
+        "n": "",
+        "on": false
+       }
+      ]
+     },
+     {
+      "id": "5evaj5o",
+      "type": "label",
+      "text": "Front"
+     }
+    ]
+   },
+   "racks": [
+    {
+     "id": "oofy5u5",
+     "device": "MPX9200",
+     "rack": "Rack 10",
+     "size": 42,
+     "devices": [
+      {
+       "id": "eseh7af",
+       "name": "NetScaler MPX9200",
+       "u": 21,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13",
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13"
+     ],
+     "cables": [
+      {
+       "id": "bhl6vfb",
+       "type": "สาย LOM RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "cjbbz4w",
+       "type": "สาย Management RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "syh7dgi",
+       "type": "สาย Fiber OM3/4 Patch Cord",
+       "text": "สาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 02 10 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 03 10 เมตร จำนวน 2 เส้น"
+      }
+     ]
+    },
+    {
+     "id": "039j365",
+     "device": "MPX9200",
+     "rack": "Rack 09",
+     "size": 42,
+     "devices": [
+      {
+       "id": "2pl2m7a",
+       "name": "NetScaler MPX9200",
+       "u": 21,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13",
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13"
+     ],
+     "cables": [
+      {
+       "id": "nhu4xbh",
+       "type": "สาย LAN RJ45 สำหรับ LOM",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "zdty9bb",
+       "type": "สาย Management RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 1 เส้น"
+      },
+      {
+       "id": "6ykx611",
+       "type": "สาย Fiber OM3/4 Patch Cord",
+       "text": "สาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 02 10 เมตร จำนวน 2 เส้น\nสาย Fiber เชื่อมต่อ Switch ข้ามตู้ไป Rack 03 10 เมตร จำนวน 2 เส้น"
+      }
+     ]
+    },
+    {
+     "id": "2qindk2",
+     "device": "H3C Server",
+     "rack": "Rack N-A08",
+     "size": 42,
+     "devices": [
+      {
+       "id": "ae3ib9x",
+       "name": "H3C Server",
+       "u": 40,
+       "h": 1
+      }
+     ],
+     "power": [
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13",
+      "มีเพียงพอต่อการใช้งาน 5-15P to C13"
+     ],
+     "cables": [
+      {
+       "id": "nuaylix",
+       "type": "สาย LAN RJ45",
+       "text": "สาย Lan ภายในตู้ ระยะสาย 3 เมตร จำนวน 3 เส้น"
+      }
+     ]
+    }
+   ],
+   "diagram": {
+    "img": null,
+    "caption": "All Connectivity = 10G-SR"
+   }
+  }
+ ],
+ "cur": 0
+}
