@@ -18,11 +18,13 @@ works offline.
 | `docs/design-mockup.html` | The approved static UI design (tokens, rail, device table, toast, mobile). Reference only; the real UI is in the two app files. |
 | `tools/port.mjs` | Generates `artifact.html` from `index.html` (applies the differences in the table below). |
 | `tests/` | Automated tests (see **How to test**): `unit/`, `golden/`, `e2e/`, `helpers/`, `fixtures/`. |
+| `SECURITY.md` | Threat model, mitigations, remaining risks, how to report issues. |
 | `package.json` | npm scripts only. There are no dependencies; plain `node` (≥ 22) runs everything. |
 | `CLAUDE.md` | This file. |
 
 **Keep the two HTML files in sync.** Apart from the differences below, the code is identical.
 When you change features, edit `index.html` only, then run `node tools/port.mjs` to regenerate `artifact.html`.
+The same command refreshes the CSP script hash in `index.html` (see **Security**). Any edit to the `<script>` needs it, or the offline page won't run its script.
 Never hand-edit `artifact.html`: `tests/unit/port.test.mjs` fails when it differs from the generator output.
 If a change to `index.html` breaks one of the generator's anchors, `port.mjs` throws and names it; update the anchor in `tools/port.mjs`.
 
@@ -33,6 +35,7 @@ If a change to `index.html` breaks one of the generator's anchors, `port.mjs` th
 | localStorage key | `rack-site-survey-offline-v1` | `rack-site-survey-v1` |
 | Buttons | ดาวน์โหลด .docx, Undo/Redo, and a ส่งออก ▾ menu: Print / Save PDF (`#bPrint`), Markdown (`#bMd`, copy + Download .md in the modal), Copy for Word (`#bWord`), Save JSON (`#bDl`), Load JSON (`#bJson`), Reset… (`#bReset`) | same minus Print and Download .md |
 | `@media print` / `@page A4` CSS | yes | no |
+| CSP `<meta>` (script pinned by sha256) | yes | no (the host owns `<head>`; it sandboxes the iframe) |
 | `dl()` blob-link helper | yes | no (uses `saveFile`) |
 
 ## Architecture (all inside one IIFE in the `<script>`)
@@ -62,7 +65,7 @@ If a change to `index.html` breaks one of the generator's anchors, `port.mjs` th
 - **Element ids** (for nav and scroll-sync):
   - Editor: `ed-doc` (cover card), `ed-<si>-site`, `ed-<si>-<sectionId>` (cards), `ed-<si>-racks-rack-<j>` (rack cards). Every card is a `<details data-k data-nav>`.
   - Chrome: `bar` (top bar), `tabs`, `saved`, `bUndo`/`bRedo`, `bDocx`, `bExport`/`expMenu`, `seg` (phone edit/preview switch), `rail`, `chips`, `editor`, `pvScroll`/`doc`/`pvMeta`, `mbar` (phone bottom bar: `mUndo`, `mRedo`, `mDocx`), `modalRoot`, `toastUndo`, `armLive`, `floorEd`, `saveBanner`.
-  - Preview: `pv-cover`, `pv-toc`, `pv-<si>` (the site's first page), `pv-<si>-<sectionId>` (each section's `<h5>`; it does not exist for `racks` when a site has no racks), `pv-<si>-racks-rack-<j>` (rack pages).
+  - Preview: `pv-cover`, `pv-toc`, `pv-<si>` (the site's first page), `pv-<si>-<sectionId>` (each section's `<h5>`; a site with no racks gets one section-3 page with the heading and a placeholder, also in the DOCX and Markdown), `pv-<si>-racks-rack-<j>` (rack pages).
   - `<si>` is the site index.
 - **Rendering**: string templates and `innerHTML`.
   - `renderTabs()` draws the site tabs (top bar).
@@ -172,6 +175,29 @@ Styling: document accent `#1A5E80`, device bar `#0E7C86`, highlighted rack `#166
 `#3A3A3A`, APJC logo top-right on every page. The paper preview is always white. The UI chrome
 has light and dark tokens on `:root`.
 
+## Security
+
+See `SECURITY.md` for the threat model. Imported JSON, uploads, typed text, `localStorage` and IndexedDB are all untrusted. **Every untrusted value must go through a sanitiser before it reaches a sink:**
+
+| Helper | Use it for |
+|---|---|
+| `esc(s)` | HTML text **and** every attribute value. It encodes `& < > " '`. Escape ids, numbers and enums in attributes too. |
+| `safeImg(u)` / `okImg(u)` | Any image URL. Only base64 `data:image/(png|jpeg|gif|webp)` up to 15 MB passes. Read images only through `imgURL()`, `diagImg()` and `logoSrc()`, which already apply it. |
+| `safeId(x)` | Ids, `[A-Za-z0-9_-]{1,64}`. `migrate()` also makes them unique. |
+| `xesc(s)` | DOCX XML text. It drops characters XML 1.0 forbids. `run()` uses it. |
+| `mdT(s)` / `mdL(s)` | Markdown user text: block text, and single-line text (headings, list items). |
+| `parseJSON(t)` | Every `JSON.parse` of storage or of a file. It drops `__proto__`, `constructor` and `prototype` keys. |
+| `safeName(s, d)` | Download file names. |
+
+Other rules:
+
+- Imported files go through `migrate(o, {imported:true})`, which drops `idb:` refs.
+- `migrate()` refuses files with a newer schema: check `newerV(o)` and show an inline message, never an `alert()`.
+- Never put an untrusted value in `on*`, `style`, `href`, `src` or a CSS selector without the matching helper.
+- Never add inline `on…=""` attributes. The CSP blocks them in `index.html`. Bind handlers in JS.
+- Rack height is capped at `RACK_MAX`, and any loop driven by U/H/size must stay bounded by it.
+- Regression tests live in `tests/unit/security.test.mjs` (with `tests/fixtures/malicious.json`) and in the e2e `security` suite.
+
 ## Constraints to respect
 
 - Single file, no external network at runtime for `index.html` (no CDN, no web fonts).
@@ -200,17 +226,21 @@ Run one file: `node --test tests/unit/docx.test.mjs`. Note that `node --test tes
 
 - **Unit tests** (`tests/unit/`): `tests/helpers/load-app.mjs` takes the IIFE source out of `index.html` (or `artifact.html`), appends `globalThis.__T={...internals}` **in memory only**, and runs it in `node:vm` with a tiny fake browser (anything-goes DOM proxies, in-memory `localStorage`, no-op timers, an `Image` that reads PNG/JPEG/SVG sizes, a canvas that returns a 1×1 PNG). The shipped files are never modified for tests. To test another internal function, add its name to `EXPOSE` in `load-app.mjs`; `T.S` gets and sets the app state.
   - Coverage: `migrate()`/startup load, `unitsOf`/`uLabel`/`devErrors`/`rackStat`, factories, `doAct` actions, `toMarkdown()`, `crc32`/`zipFiles` (read back with `tests/helpers/zip.mjs`), `buildDocx()` (well-formed XML via `tests/helpers/xml.mjs`, Thai `w:cs`/`w:szCs`, 10 tables, images), the `SECTIONS` registry, `pagePlan()` (12 pages), escaping, and the port sync (`port.test.mjs`).
-  - Tests marked `todo` are known gaps that are reported but not fixed yet (the escaping/XSS items in `escaping.test.mjs`). When you fix one, remove its `todo` option so the test then guards the fix.
+  - Mark a known, unfixed gap as a `todo` test. When you fix it, remove the `todo` option so the test then guards the fix. There are none at the moment.
 - **Golden files** (`tests/golden/`): `sample.md` and every DOCX part of `sample.json` except `docProps/core.xml` (timestamp). `docx/media.json` lists the media: as-is images by sha256, and rasterised SVG drawings as `"raster"` (name only, because pixels depend on the renderer). The vm build and the real browser must produce byte-identical Markdown and XML (the e2e `golden` suite checks the browser side).
-- **Browser e2e** (`tests/e2e/run.mjs`, driver `tests/e2e/cdp.mjs`): finds Chrome/Edge/Chromium automatically (override with `CHROME_PATH=…` or `--browser …`) and prints `SKIP` (exit 0) if none is installed. Each suite gets a fresh temp profile and a random DevTools port, and the browser is always killed. The pages are copied to a temp dir, and `artifact.html` gets a viewport `<meta>` there because the host page supplies it. Suites: `behaviour` (storage, migration, undo/redo, IndexedDB images, import/export, quota banner, GC), `ui` (card state, focus/scroll, rail + scroll-spy, delete arming, tabs, modal, floor cells, device table, reset, phone layout) and `golden`. Options: `--only index|artifact`, `--suite behaviour|ui|golden`.
+- **Browser e2e** (`tests/e2e/run.mjs`, driver `tests/e2e/cdp.mjs`): finds Chrome/Edge/Chromium automatically (override with `CHROME_PATH=…` or `--browser …`) and prints `SKIP` (exit 0) if none is installed. Each suite gets a fresh temp profile and a random DevTools port, and the browser is always killed. The pages are copied to a temp dir, and `artifact.html` gets a viewport `<meta>` there because the host page supplies it. Suites:
+  - `behaviour`: storage, migration, undo/redo, IndexedDB images, import/export, quota banner, GC
+  - `ui`: card state, focus/scroll, rail + scroll-spy, delete arming, tabs, modal, floor cells, device table, reset, phone layout
+  - `golden`
+  - `security`: importing `malicious.json` sets no sentinel, leaves no handlers or foreign URLs, and newer schemas are refused
+  - Options: `--only index|artifact`, `--suite behaviour|ui|golden|security`.
+  - Downloads are read from the Blob given to `URL.createObjectURL`, because the CSP has no `connect-src`.
 - Visual check of the DOCX when needed: `soffice --headless --convert-to pdf <file>.docx` (sample data → 12 pages).
 
 ## Known limits and ideas for next steps
 
 - Open issues found by the test suite:
-  - Escaping (`todo` tests in `tests/unit/escaping.test.mjs`): image refs (`diagram.img`, `doc.logo`) and ids from imported JSON reach HTML attributes unescaped (XSS via a crafted JSON file). `esc()` does not encode `'`.
-  - A site with no racks still lists section 3 in the TOC (same page number as section 4), and the DOCX has no section-3 heading.
-  - `migrate()` stamps `v: 2` on a file from a newer schema (`v > 2`) instead of refusing or keeping it.
+  - None at the moment. The escaping/XSS, empty-racks TOC and newer-schema items were fixed in the security review (see `SECURITY.md`).
 - The TOC page numbers are computed, not a Word TOC field. They drift when a rack table overflows a page. Option: emit a real `TOC \o "1-2"` field and let Word update it.
 - The connection diagram is image upload only. A built-in diagram editor (switches ↔ devices, link labels like "10G-SR") would be a natural next feature.
 - Ideas:
