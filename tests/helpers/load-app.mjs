@@ -25,7 +25,9 @@ export const PNG_1x1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCA
 const EXPOSE = ['migrate', 'normSite', 'sample', 'blankSite', 'blankRack', 'cloneSite', 'unitsOf', 'uLabel', 'devErrors',
   'rackStat', 'toMarkdown', 'crc32', 'zipFiles', 'buildDocx', 'SECTIONS', 'secX', 'pagePlan', 'docHTML', 'siteHTML',
   'esc', 'rackSVG', 'floorSVG', 'rackCard', 'card', 'SCHEMA', 'KEY', 'inlineImages', 'imgURL', 'logoSrc', 'logoHTML',
-  'APJC_LOGO', 'dataUrlBytes', 'exportJSON', 'doAct'];
+  'APJC_LOGO', 'dataUrlBytes', 'exportJSON', 'doAct',
+  // sanitisers and guards (security tests)
+  'xesc', 'safeImg', 'okImg', 'safeId', 'mdT', 'mdL', 'parseJSON', 'safeName', 'newerV', 'getP', 'setP', 'docxImg', 'RACK_MAX'];
 
 /** Extract the IIFE source from the app HTML and append the test hook (in memory only). */
 export function appSource(file = 'index.html') {

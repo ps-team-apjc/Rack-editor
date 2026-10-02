@@ -82,8 +82,12 @@ test('pagePlan: varies with racks per site', () => {
 test('pagePlan: a site with no racks', () => {
   T.S = T.migrate({sites: [{racks: []}]});
   const p = T.pagePlan();
-  assert.equal(p.pages, 4);
-  assert.equal((T.docHTML().h.match(/<div class="page[ "]/g) || []).length, 4);
-  // Current behaviour: the TOC still lists section 3 (page 4) although no rack page exists; see report.
-  assert.deepEqual(plain(p.sites[0].secs), [3, 3, 4, 4]);
+  // Section 3 keeps its own page (heading + placeholder), so the TOC numbers stay distinct and match the preview.
+  assert.equal(p.pages, 5);
+  const h = T.docHTML().h;
+  assert.equal((h.match(/<div class="page[ "]/g) || []).length, 5);
+  assert.deepEqual(plain(p.sites[0].secs), [3, 3, 4, 5]);
+  assert.ok(h.includes('id="pv-0-racks"'), 'section 3 heading exists in the preview');
+  assert.ok(h.includes('(ยังไม่มีข้อมูลตู้ Rack)'));
+  assert.ok(T.toMarkdown().includes('\n\n(ยังไม่มีข้อมูลตู้ Rack)\n'), 'Markdown placeholder under section 3');
 });

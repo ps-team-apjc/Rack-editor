@@ -1,0 +1,77 @@
+{
+ "v": 2,
+ "__proto__": {"polluted": "top"},
+ "constructor": {"prototype": {"polluted": "ctor"}},
+ "cur": "0\" onfocus=\"window.__pwned=1",
+ "doc": {
+  "__proto__": {"polluted": "doc"},
+  "title": "<img src=x onerror=\"window.__pwned=1\"> T'itle \u0001\u000b\ud800",
+  "company": "</div><script>window.__pwned=1</script>",
+  "logoText": "</span><svg onload=window.__pwned=1>",
+  "logo": "x\" onerror=\"window.__pwned=1"
+ },
+ "sites": [
+  {
+   "id": "s\" onmouseover=\"window.__pwned=1",
+   "name": "<script>window.__pwned=1</script>\n# fake heading",
+   "info": {
+    "agency": "\"><img src=x onerror=window.__pwned=1>",
+    "location": "'><img src=x onerror=window.__pwned=1>",
+    "datetime": "<iframe src=\"javascript:window.__pwned=1\"></iframe>",
+    "surveyors": "<a href=\"javascript:window.__pwned=1\">click</a>\nline 2"
+   },
+   "place": {
+    "equipment": "<svg><script>window.__pwned=1</script></svg>",
+    "building": "x\" style=\"background:url(javascript:window.__pwned=1)",
+    "address": "<style>*{background:url(//evil.example/x)}</style>",
+    "racks": "| col | break |"
+   },
+   "floor": {
+    "orient": "\"><img src=x onerror=window.__pwned=1>",
+    "door": "left\" onclick=\"window.__pwned=1",
+    "items": [
+     {"id": "f\" onfocus=\"window.__pwned=1", "type": "label", "text": "</text><script>window.__pwned=1</script>"},
+     {"id": "f2", "type": "row", "racks": ["<img src=x onerror=window.__pwned=1>", {"n": "\" onfocus=\"window.__pwned=1", "on": true}, {"n": "", "on": "yes"}]},
+     {"id": "f2", "type": "<script>", "text": "duplicate id"}
+    ]
+   },
+   "racks": [
+    {
+     "id": "r\" onmouseover=\"window.__pwned=1",
+     "device": "<img src=x onerror=window.__pwned=1>",
+     "rack": "Rack \" autofocus onfocus=\"window.__pwned=1",
+     "size": 1000000000,
+     "devices": [
+      {"id": "d\" onfocus=\"window.__pwned=1", "name": "</text><foreignObject><img src=x onerror=window.__pwned=1></foreignObject>", "u": "21\" onfocus=\"window.__pwned=1", "h": 1},
+      {"id": "d2", "name": "huge", "u": 1, "h": 1000000000},
+      {"id": "d3", "name": "negative", "u": -1000000000, "h": 2000000000}
+     ],
+     "power": ["<img src=x onerror=window.__pwned=1>", 7, null],
+     "cables": [
+      {"id": "c\" onfocus=\"window.__pwned=1", "type": "<b onmouseover=window.__pwned=1>t</b>", "text": "a\n<img src=x onerror=window.__pwned=1>\n\u0000\u001f"}
+     ]
+    }
+   ],
+   "diagram": {"img": "javascript:window.__pwned=1", "caption": "<img src=x onerror=window.__pwned=1>"}
+  },
+  {
+   "__proto__": {"polluted": "site"},
+   "id": "s2",
+   "name": "Second",
+   "racks": [{"id": "s2", "size": "42\" onfocus=\"window.__pwned=1", "devices": [{"id": "dd", "u": 3, "h": 1}]}],
+   "diagram": {"img": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIG9ubG9hZD0id2luZG93Ll9fcHduZWQ9MSIvPg==", "caption": ""}
+  },
+  {
+   "id": "s3",
+   "name": "Third",
+   "racks": [],
+   "diagram": {"img": "data:image/png;base64,AAAA\" onerror=\"window.__pwned=1", "caption": ""}
+  },
+  {
+   "id": "s4",
+   "name": "Fourth",
+   "racks": [],
+   "diagram": {"img": "idb:abc123", "caption": "idb refs are not accepted from imported files"}
+  }
+ ]
+}

@@ -3,7 +3,7 @@
 //
 //   node tests/e2e/run.mjs                      both targets, all suites
 //   node tests/e2e/run.mjs --only index         one target (index | artifact)
-//   node tests/e2e/run.mjs --suite ui           one suite (behaviour | ui | golden)
+//   node tests/e2e/run.mjs --suite ui           one suite (behaviour | ui | golden | security)
 //   node tests/e2e/run.mjs --browser "C:/…/msedge.exe"   or set CHROME_PATH
 //
 // Suites (each runs in its own browser with a fresh temporary profile, killed afterwards):
@@ -11,6 +11,7 @@
 //   ui         card state, focus/scroll keeping, outline rail + scroll-spy, delete arming, tabs, modal, floor
 //              cells, device table errors, reset flow, phone layout
 //   golden     Markdown + DOCX of sample.json from the real browser equal tests/golden/ (see golden.test.mjs)
+//   security   importing tests/fixtures/malicious.json runs no injected script (sentinel window.__pwned stays unset)
 //
 // Pages are copied to a temp dir first. artifact.html gets a viewport <meta> prepended, because the
 // claude.ai host page supplies it. Exits 0 with a SKIP message when no browser is installed.
@@ -28,10 +29,11 @@ const TARGETS = [
   {name: 'index', file: 'index.html', key: 'rack-site-survey-offline-v1'},
   {name: 'artifact', file: 'artifact.html', key: 'rack-site-survey-v1'},
 ].filter((t) => !arg('--only') || t.name === arg('--only'));
-const SUITES = {behaviour, ui, golden};
+const SUITES = {behaviour, ui, golden, security};
 const suiteNames = arg('--suite') ? [arg('--suite')] : Object.keys(SUITES);
 const IMG = fs.readFileSync(path.join(ROOT, 'tests/fixtures/diagram.dataurl.txt'), 'utf8').trim();
 const SAMPLE = fs.readFileSync(path.join(ROOT, 'sample.json'), 'utf8');
+const MAL = fs.readFileSync(path.join(ROOT, 'tests/fixtures/malicious.json'), 'utf8');
 // Network noise from Google Fonts in artifact.html (offline machines) is not an app error.
 const isNoise = (e) => /fonts\.(googleapis|gstatic)\.com/.test(e);
 
@@ -374,4 +376,52 @@ async function golden({b, ok, url, KEY}) {
   const bad = compareGolden({md, parts});
   ok('browser Markdown + DOCX equal tests/golden (except core.xml and raster pixels)', bad.length === 0, '\n' + bad.join('\n'));
   ok('preview page count is 12', (await ev(`document.querySelectorAll('#doc .page').length`)) === 12);
+}
+
+/* ------------------------------------------------------------------ security */
+async function security({b, ok, url, KEY}) {
+  const {ev, reload, waitFor, loadJson} = tools(b, url, KEY);
+  // Fires every event an injected handler could listen to, then reports what an attacker would have achieved.
+  const audit = `(async()=>{
+    const els=[...document.querySelectorAll('body *')];
+    for(const e of els)for(const t of ['mouseover','mouseenter','focus','focusin','error','load','animationstart','toggle','pointerover'])try{e.dispatchEvent(new Event(t))}catch(_){}
+    await new Promise(r=>setTimeout(r,300));
+    return {pwned:window.__pwned,
+      handlers:els.flatMap(e=>[...e.attributes].filter(a=>/^on/i.test(a.name)).map(a=>e.tagName+'['+a.name+']')),
+      scripts:document.querySelectorAll('script').length,
+      foreign:[...document.querySelectorAll('[src],[href]')].map(e=>e.getAttribute('src')??e.getAttribute('href')).filter(v=>!(v.startsWith('#')||/^data:image.(png|jpeg|jpg|gif|webp);base64,/.test(v)||v.startsWith('https://fonts.googleapis.com')||v.startsWith('https://fonts.gstatic.com'))),
+      badTags:document.querySelectorAll('#doc iframe,#doc object,#doc embed,#doc foreignObject,#editor iframe,#editor foreignObject,#doc script,#editor script').length}})()`;
+  const clean = (r) => r.pwned === undefined && r.handlers.length === 0 && r.foreign.length === 0 && r.badTags === 0;
+  await reload();
+  const scripts0 = await ev(`document.querySelectorAll('script').length`);
+  await ev(`window.__pwned=undefined`);
+  ok('malicious.json imports (it is a valid v2 survey)', (await loadJson(MAL)) === '');
+  const n = await ev(`document.querySelectorAll('[data-tab]').length`);
+  ok('all 4 sites imported', n === 4, String(n));
+  for (let i = 0; i < n; i++) {
+    await ev(`document.querySelector('[data-tab="${i}"]').click()`);
+    await sleep(150);
+    const r = await ev(audit);
+    ok(`site ${i + 1}: no injected handler, script, foreign URL or tag ran or exists`, clean(r) && r.scripts === scripts0, JSON.stringify(r));
+  }
+  await ev(`document.querySelector('[data-tab="0"]').click()`);
+  // exports and Copy for Word with the hostile state
+  await ev(`__md()`);
+  const d = await ev(`__docx()`);
+  ok('docx still builds', !!d && d.b64.length > 1000);
+  await ev(`document.getElementById('bWord').click()`);
+  await sleep(1500);
+  ok('Copy for Word runs no injected script', (await ev(`window.__pwned`)) === undefined);
+  // the sanitised state survives a reload from storage
+  await reload();
+  const r = await ev(audit);
+  ok('after reload: still clean', clean(r) && r.scripts === scripts0, JSON.stringify(r));
+  ok('stored state has safe ids and no hostile image refs', await ev(`(()=>{const s=JSON.parse(localStorage.getItem(${JSON.stringify(KEY)}));return s.sites.every(x=>/^[A-Za-z0-9_-]+$/.test(x.id)&&x.diagram.img===null)&&s.doc.logo===''})()`));
+  ok('Object.prototype not polluted', await ev(`({}).polluted===undefined`));
+  // a file from a newer schema is refused with an inline message
+  const err = await ev(`__loadJson(${JSON.stringify(JSON.stringify({v: 3, sites: [{name: 'future'}]}))})`);
+  ok('newer-schema file refused with an inline message', /schema v3/.test(err), err);
+  await ev(`document.getElementById('modalRoot').innerHTML=''`);
+  ok('state unchanged after the refused import', await ev(`!document.getElementById('editor').textContent.includes('future')`));
+  void waitFor;
 }

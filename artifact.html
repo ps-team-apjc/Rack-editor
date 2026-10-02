@@ -345,7 +345,7 @@ table.t td.fig{text-align:center;padding:12px}
 table.t td .ln{display:block}
 .fig svg{max-width:100%;height:auto}
 .diagram img{max-width:100%;margin:0 auto;display:block}
-.diagram .ph{border:1px dashed #aaa;color:#888;padding:40px;text-align:center}
+.page .ph{border:1px dashed #aaa;color:#888;padding:40px;text-align:center}
 .cap{font-size:11px;color:#444;text-align:center;margin-top:6px;white-space:pre-wrap}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -426,7 +426,27 @@ table.t td .ln{display:block}
 (function(){
 const KEY='rack-site-survey-v1';
 const uid=()=>Math.random().toString(36).slice(2,9);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* ---------- sanitisers: every untrusted value (typed text, imported JSON, localStorage/IndexedDB) goes through these ----------
+   esc(s)     HTML text and quoted attribute values (" and ' both encoded)
+   xesc(s)    DOCX XML text: also drops characters XML 1.0 forbids (C0 controls, lone surrogates, U+FFFE/FFFF)
+   safeImg(u) only a size-capped base64 data:image/(png|jpeg|gif|webp) URL passes, anything else becomes ''
+   safeId(x)  ids are [A-Za-z0-9_-]{1,64}; anything else gets a fresh uid() */
+const ESC_M={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>ESC_M[c]);
+const xesc=s=>String(s??'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\u{FFFE}\u{FFFF}\u{D800}-\u{DFFF}]/gu,'').replace(/[&<>"]/g,c=>ESC_M[c]);   // with /u a valid surrogate pair is one code point, so only lone surrogates match
+const IMG_MAX=15e6,IMG_OK=/^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const okImg=u=>typeof u==='string'&&u.length<=IMG_MAX&&IMG_OK.test(u);
+const safeImg=u=>okImg(u)?u:'';
+const ID_RE=/^[A-Za-z0-9_-]{1,64}$/;
+const safeId=x=>typeof x==='string'&&ID_RE.test(x)?x:typeof x==='number'&&ID_RE.test(String(x))?String(x):uid();
+/* Markdown: user text never carries raw HTML (renderers that allow inline HTML would run it); single-line fields stay on one line. */
+const mdT=s=>String(s??'').replace(/</g,'&lt;');
+const mdL=s=>mdT(s).replace(/\s*\n\s*/g,' ');
+/* JSON from storage or a file: drop keys that could reach an object prototype if a later merge used them. */
+const parseJSON=t=>JSON.parse(t,(k,v)=>k==='__proto__'||k==='constructor'||k==='prototype'?undefined:v);
+/* File names for downloads: no path or control characters, no leading/trailing dots, at most 80 characters. */
+const safeName=(s,d)=>String(s??'').replace(/[\x00-\x1F\x7F\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim().replace(/^[. ]+|[. ]+$/g,'').slice(0,80).trim()||d;
+const RACK_MAX=100,UPLOAD_MAX=30e6,JSON_MAX=100e6;   // rack height (U), image upload and JSON file size limits (bytes)
 const R=(n,on)=>({n,on:!!on});
 const APJC_LOGO='data:image/png;base64,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';
 
@@ -495,41 +515,51 @@ const SCHEMA=2;
 const isO=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
 const str=(x,d='')=>typeof x==='string'?x:typeof x==='number'?String(x):d;
 const arr=x=>Array.isArray(x)?x:[];
-function migrate(o){
-  if(!isO(o)||!Array.isArray(o.sites))return null;
+/* U / height values: a finite number (numeric strings from old drafts become numbers), '' (field cleared) or the default. */
+const numOr=(x,d)=>x===''?'':typeof x==='number'?(Number.isFinite(x)?x:d):typeof x==='string'&&x.trim()!==''&&Number.isFinite(+x)?+x:d;
+/* newerV(o): the schema version when o comes from a newer build of the app (refused, never silently downgraded), else 0. */
+const newerV=o=>isO(o)&&+o.v>SCHEMA?+o.v:0;
+/* migrate(o, {imported}): imported files must carry inline images, so "idb:" refs (which point into this browser's store) are dropped. */
+function migrate(o,opt={}){
+  if(!isO(o)||!Array.isArray(o.sites)||newerV(o))return null;
   let v=+o.v||1;
   if(v<2){v=2} // v1 → v2: no shape change; normalisation below fills any missing fields
   // Phase-1 example: if(v<3){o.sites.forEach(s=>{if(isO(s)){s.photos=arr(s.photos);s.issues=arr(s.issues);s.signoff=isO(s.signoff)?s.signoff:{}}});v=3}
+  const ctx={seen:new Set(),imported:!!opt.imported};
   const d=isO(o.doc)?o.doc:{};
-  o.doc={...d,title:str(d.title,'Site Survey'),company:str(d.company),logoText:str(d.logoText,'APJC'),logo:d.logo==null?null:str(d.logo)};
-  o.sites=o.sites.filter(isO).map(normSite);
+  o.doc={...d,title:str(d.title,'Site Survey'),company:str(d.company),logoText:str(d.logoText,'APJC'),logo:d.logo==null?null:imgRef(d.logo,ctx)||''};
+  o.sites=o.sites.filter(isO).map(s=>normSite(s,ctx));
   o.cur=Number.isInteger(+o.cur)&&+o.cur>=0&&+o.cur<o.sites.length?+o.cur:0;
   o.v=SCHEMA;
   return o;
 }
-function normSite(s){
+/* An image field keeps only a valid inline data URL or (not for imported files) an "idb:" ref; anything else → null. */
+function imgRef(x,ctx){return okImg(x)||!ctx.imported&&typeof x==='string'&&IDB_RE.test(x)?x:null}
+function normSite(s,ctx={seen:new Set()}){
   const fill=(x,ks)=>{x=isO(x)?x:{};ks.forEach(k=>x[k]=str(x[k]));return x};
-  s.id=str(s.id)||uid();s.name=str(s.name);
+  const id=x=>{let i=safeId(x);while(ctx.seen.has(i))i=uid();ctx.seen.add(i);return i};   // valid and unique in the document
+  s.id=id(s.id);s.name=str(s.name);
   s.info=fill(s.info,['agency','location','datetime','surveyors']);
   s.place=fill(s.place,['equipment','building','address','racks']);
   const f=s.floor=isO(s.floor)?s.floor:{};
   f.orient=f.orient==='v'?'v':'h';f.door=['left','center','right','none'].includes(f.door)?f.door:'center';
   f.items=arr(f.items).filter(isO).map(it=>it.type==='row'
-    ?{...it,id:str(it.id)||uid(),type:'row',racks:arr(it.racks).map(r=>isO(r)?{...r,n:str(r.n),on:!!r.on}:{n:str(r),on:false})}
-    :{...it,id:str(it.id)||uid(),type:'label',text:str(it.text)});
-  s.racks=arr(s.racks).filter(isO).map(r=>{r.id=str(r.id)||uid();r.device=str(r.device);r.rack=str(r.rack);if(!(+r.size>0))r.size=42;
-    r.devices=arr(r.devices).filter(isO).map(d=>({...d,id:str(d.id)||uid(),name:str(d.name),u:d.u??'',h:d.h??1}));
+    ?{...it,id:id(it.id),type:'row',racks:arr(it.racks).map(r=>isO(r)?{...r,n:str(r.n),on:!!r.on}:{n:str(r),on:false})}
+    :{...it,id:id(it.id),type:'label',text:str(it.text)});
+  s.racks=arr(s.racks).filter(isO).map(r=>{r.id=id(r.id);r.device=str(r.device);r.rack=str(r.rack);
+    const z=Math.floor(+r.size);r.size=z>0?Math.min(z,RACK_MAX):42;
+    r.devices=arr(r.devices).filter(isO).map(d=>({...d,id:id(d.id),name:str(d.name),u:numOr(d.u??'',''),h:numOr(d.h??1,1)}));
     r.power=arr(r.power).map(p=>str(p));
-    r.cables=arr(r.cables).filter(isO).map(c=>({...c,id:str(c.id)||uid(),type:str(c.type),text:str(c.text)}));return r});
+    r.cables=arr(r.cables).filter(isO).map(c=>({...c,id:id(c.id),type:str(c.type),text:str(c.text)}));return r});
   const g=isO(s.diagram)?s.diagram:{};
-  s.diagram={...g,img:typeof g.img==='string'&&g.img?g.img:null,caption:str(g.caption)};
+  s.diagram={...g,img:imgRef(g.img,ctx),caption:str(g.caption)};
   return s;
 }
 
 /* ---------- image store: data URLs live in IndexedDB, S keeps "idb:<id>" refs ----------
    IMG is the in-memory cache (id → data URL) so rendering stays synchronous.
    If IndexedDB is unavailable, putImg() returns the data URL itself and S stays inline (old behaviour). */
-const IDB_RE=/^idb:[a-z0-9]+$/,DATA_RE=/^data:image\/[\w.+-]+;base64,/,IMG={},GC_AGE=864e5;
+const IDB_RE=/^idb:[a-z0-9]{1,40}$/,IMG={},GC_AGE=864e5;   // IMG only ever holds values that passed okImg()
 let idbP;
 function idbOpen(){  // resolves the db, or null if unavailable; a slow open only times out this call, later calls still get the db
   idbP=idbP||new Promise(res=>{try{const r=indexedDB.open(KEY+'-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');
@@ -537,12 +567,12 @@ function idbOpen(){  // resolves the db, or null if unavailable; a slow open onl
   return Promise.race([idbP,new Promise(r=>setTimeout(()=>r(null),5000))])}
 function idb(mode,fn){return idbOpen().then(db=>db&&new Promise(res=>{
   try{const tx=db.transaction('img',mode),q=fn(tx.objectStore('img'));tx.oncomplete=()=>res(q?q.result:true);tx.onerror=tx.onabort=()=>res(null)}catch(e){res(null)}}))}
-function imgURL(ref){return typeof ref==='string'&&IDB_RE.test(ref)?(IMG[ref.slice(4)]||''):(ref||'')}
+function imgURL(ref){return typeof ref==='string'&&IDB_RE.test(ref)?safeImg(IMG[ref.slice(4)]):safeImg(ref)}
 const diagImg=s=>imgURL(s.diagram.img);
 function hashStr(u){let a=0x811c9dc5,b=0x01000193^u.length;for(let i=0;i<u.length;i++){const c=u.charCodeAt(i);a=Math.imul(a^c,16777619);b=Math.imul(b+c,2246822519)^(b>>>13)}
   return (a>>>0).toString(36)+(b>>>0).toString(36)}
 async function putImg(u){
-  if(!DATA_RE.test(u))return u;
+  if(!okImg(u))return '';                          // not an accepted image → caller treats '' as "no image"
   let id=hashStr(u);const old=await idb('readonly',st=>st.get(id));
   if(old===null)return u;                         // no IndexedDB → keep inline
   if(old&&old.u!==u)id+=uid();                     // hash collision → distinct id
@@ -551,10 +581,10 @@ async function putImg(u){
 }
 function walkStr(o,fn){for(const k in o){const v=o[k];if(typeof v==='string'){const r=fn(v);if(r!==undefined)o[k]=r}else if(v&&typeof v==='object')walkStr(v,fn)}}
 const refIds=t=>[...String(t).matchAll(/"idb:([a-z0-9]+)"/g)].map(m=>m[1]);
-async function internImages(o){const todo=[];walkStr(o,v=>{if(DATA_RE.test(v))todo.push(v)});   // inline data URLs → IDB refs
-  const map={};for(const u of todo)if(!(u in map))map[u]=await putImg(u);walkStr(o,v=>v in map?map[v]:undefined);return o}
+async function internImages(o){const todo=[];walkStr(o,v=>{if(okImg(v))todo.push(v)});   // inline data URLs → IDB refs
+  const map=new Map();for(const u of todo)if(!map.has(u))map.set(u,await putImg(u));walkStr(o,v=>map.has(v)?map.get(v):undefined);return o}
 async function loadImages(o){const ids=refIds(JSON.stringify(o)).filter(id=>!(id in IMG));
-  for(const id of ids){const r=await idb('readonly',st=>st.get(id));if(r&&r.u)IMG[id]=r.u}return ids.length}
+  for(const id of ids){const r=await idb('readonly',st=>st.get(id));if(r&&okImg(r.u))IMG[id]=r.u}return ids.length}
 function inlineImages(o){const c=JSON.parse(JSON.stringify(o));walkStr(c,v=>IDB_RE.test(v)?(IMG[v.slice(4)]||''):undefined);return c}
 async function gcImages(){  // drop records no longer referenced by S, saved storage or undo/redo history (and older than a day, so other tabs are safe)
   let raw='';try{raw=localStorage.getItem(KEY)||''}catch(e){}
@@ -564,15 +594,17 @@ async function gcImages(){  // drop records no longer referenced by S, saved sto
 }
 const exportJSON=()=>JSON.stringify(inlineImages(S),null,1);
 
-let S;
-try{const raw=localStorage.getItem(KEY);S=raw?migrate(JSON.parse(raw)):null}catch(e){S=null}
+let S,HOLD='';   // HOLD: a newer-schema draft is in storage and could not be backed up, so save() must not overwrite it
+try{const raw=localStorage.getItem(KEY),o=raw?parseJSON(raw):null,nv=newerV(o);
+  if(nv){try{localStorage.setItem(KEY+'-v'+nv+'-backup',raw)}catch(e){HOLD='ฉบับร่างในเบราว์เซอร์นี้มาจากเวอร์ชันใหม่กว่า (schema v'+nv+') — ไม่ได้บันทึกทับ'}}
+  S=migrate(o)}catch(e){S=null}
 if(!S||!S.sites.length)S=sample();
 
 /* ---------- UI state: which cards are open. Kept apart from S, so it is never in undo history or the exported JSON ----------
    Keys: 'doc', 'site:<siteId>', 'sec:<siteId>:<sectionId>', 'rack:<rackId>'. Missing key = the card's default. */
 const UIKEY=KEY+'-ui';
 let UI={o:{}};
-try{const u=JSON.parse(localStorage.getItem(UIKEY)||'null');if(u&&u.o&&typeof u.o==='object'&&!Array.isArray(u.o))UI.o=u.o}catch(e){}
+try{const u=parseJSON(localStorage.getItem(UIKEY)||'null');if(u&&u.o&&typeof u.o==='object'&&!Array.isArray(u.o))UI.o=u.o}catch(e){}
 let uiT;
 function saveUI(){clearTimeout(uiT);uiT=setTimeout(()=>{
   const ks=Object.keys(UI.o);if(ks.length>300)ks.slice(0,ks.length-300).forEach(k=>delete UI.o[k]);
@@ -585,6 +617,7 @@ let saveT;
 const hhmm=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
 function setSaved(ok,txt){const el=document.getElementById('saved');el.className='status'+(ok?'':' warn');el.innerHTML='<i></i><span></span>';el.lastChild.textContent=txt;el.title=txt}
 function save(){clearTimeout(saveT);saveT=setTimeout(()=>{
+  if(HOLD){setSaved(false,HOLD);return}
   try{localStorage.setItem(KEY,JSON.stringify(S));setSaved(true,'บันทึกแล้ว '+hhmm());saveBanner(false)}
   catch(e){setSaved(false,'บันทึกไม่ได้ — ใช้ บันทึก/โหลด JSON');
     if(e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||e.code===22||e.code===1014))saveBanner(true)}
@@ -612,8 +645,12 @@ function redo(){commitEdit();if(!REDO.length)return false;UNDO.push(snap());if(U
 function histUI(){[['bUndo','mUndo',UNDO],['bRedo','mRedo',REDO]].forEach(([a,b,st])=>[a,b].forEach(i=>{const e=document.getElementById(i);if(e)e.disabled=!st.length}))}
 
 /* ---------- path helpers for bound inputs ---------- */
-function getP(o,p){return p.split('.').reduce((a,k)=>a==null?a:a[k],o)}
-function setP(o,p,v){const ks=p.split('.');const last=ks.pop();const t=ks.reduce((a,k)=>a[k],o);t[last]=v}
+/* Paths only ever come from our own data-b attributes; still, never walk into prototype keys or write through a non-object. */
+const BADK=new Set(['__proto__','prototype','constructor']);
+function getP(o,p){const ks=p.split('.');if(ks.some(k=>BADK.has(k)))return undefined;return ks.reduce((a,k)=>a==null?a:Object.hasOwn(a,k)?a[k]:undefined,o)}
+function setP(o,p,v){const ks=p.split('.');if(ks.some(k=>BADK.has(k)))return false;const last=ks.pop();
+  const t=ks.reduce((a,k)=>a!=null&&typeof a==='object'&&Object.hasOwn(a,k)?a[k]:null,o);
+  if(t==null||typeof t!=='object'||!Object.hasOwn(t,last))return false;t[last]=v;return true}
 
 /* ---------- derived ---------- */
 function unitsOf(r){return r.devices.reduce((a,d)=>a+(+d.h||0),0)}
@@ -622,7 +659,7 @@ function uLabel(r){return r.devices.filter(d=>d.u).map(d=>(+d.h>1)?`U ${d.u}–$
 function devErrors(r){const e={},occ={};
   r.devices.forEach((d,i)=>{const u=+d.u,h=+d.h||1;if(!u)return;
     if(u<1||u+h-1>r.size)e[i]=`เกินขนาดตู้ — ใช้ได้เฉพาะ U 1–${r.size}`;
-    for(let k=u;k<u+h;k++){
+    for(let k=Math.max(u,1),top=Math.min(u+h-1,+r.size||0,RACK_MAX);k<=top;k++){   // only units inside the rack can overlap (outside is already an error); keeps huge U/H values cheap
       if(occ[k]!==undefined){if(!e[i])e[i]=`ทับซ้อนกับ ${r.devices[occ[k]].name||'อุปกรณ์อื่น'} ที่ U ${k} — เลื่อนตำแหน่งหรือลดความสูง`}
       else occ[k]=i}});
   return e}
@@ -635,11 +672,11 @@ function rackStat(r){
 
 /* ---------- SVG drawings ---------- */
 function rackSVG(r){
-  const UH=8,top=10,lx=26,w=220,H=r.size*UH;
+  const N=Math.min(Math.max(Math.floor(+r.size)||0,0),RACK_MAX),UH=8,top=10,lx=26,w=220,H=N*UH;
   let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lx+w+14} ${H+top*2}" width="${lx+w+14}" height="${H+top*2}" font-family="Sarabun,Tahoma,sans-serif">`;
   s+=`<rect x="${lx-18}" y="${top-4}" width="${w+26}" height="${H+8}" fill="#FFFFFF" stroke="#3A3A3A" stroke-width="1.5"/>`;
   s+=`<rect x="${lx}" y="${top}" width="${w}" height="${H}" fill="#FAFBFC" stroke="#9AA3A8" stroke-width=".6"/>`;
-  for(let u=1;u<=r.size;u++){const y=top+H-u*UH;
+  for(let u=1;u<=N;u++){const y=top+H-u*UH;
     s+=`<line x1="${lx}" x2="${lx+w}" y1="${y}" y2="${y}" stroke="#E3E6E8" stroke-width=".5"/>`;
     s+=`<text x="${lx-4}" y="${y+UH-2}" font-size="5.5" text-anchor="end" fill="#777" font-family="IBM Plex Mono,monospace">${u}</text>`}
   r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(!u||u<1)return;const y=top+H-(u+h-1)*UH;
@@ -684,7 +721,7 @@ function floorSVG(f,interactive){
 const F=(label,path,opt={})=>{const v=getP(S,path)??'';
   const lb=`<span class="lbl">${esc(label)}${opt.en?`<small>${esc(opt.en)}</small>`:''}</span>`;
   return `<label class="fld">${lb}${opt.area?`<textarea data-b="${path}" rows="${opt.rows||2}" placeholder="${esc(opt.ph||'')}">${esc(v)}</textarea>`:
-  `<input${opt.mono?' class="mono"':''} data-b="${path}" ${opt.num?`type="number" inputmode="numeric" min="1"${opt.max?` max="${opt.max}"`:''}`:'type="text"'} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
+  `<input${opt.mono?' class="mono"':''} data-b="${path}" ${opt.num?`type="number" inputmode="numeric" min="1"${opt.max?` max="${opt.max}"`:''}${opt.clamp?' data-clamp':''}`:'type="text"'} value="${esc(v)}" placeholder="${esc(opt.ph||'')}">`}</label>`};
 
 /* ---------- section registry: one entry per numbered section of a site ----------
    Section number = position + 1. x = {n, t (title), id (preview anchor)}; c = DOCX helpers from buildDocx().
@@ -692,7 +729,8 @@ const F=(label,path,opt={})=>{const v=getP(S,path)??'';
    pages(s) says how many (for the TOC). editor(s,P,si) returns the card body; ids: ed-<si>-<id>, pv-<si>-<id>.
    UI-only fields (never in the document output): label/en (Thai + English card/rail title), chip (short phone label),
    done(s) → 'full'|'part'|'empty' (outline dot), sum(s) → one-line card summary (HTML). */
-const mdRow=(k,v)=>`| ${k} | ${String(v??'').replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
+const mdRow=(k,v)=>`| ${mdL(k).replace(/\|/g,'\\|')} | ${mdT(v).replace(/\n/g,'<br>').replace(/\|/g,'\\|')} |`;
+const NO_RACKS='(ยังไม่มีข้อมูลตู้ Rack)';
 const MDH='| หัวข้อ | รายละเอียด |\n|---|---|\n';
 const SECTIONS=[
 {id:'info',title:'ข้อมูลเกี่ยวกับการสำรวจพื้นที่',label:'ข้อมูลการสำรวจ',en:'Survey info',chip:'สำรวจ',page:false,
@@ -732,27 +770,28 @@ const SECTIONS=[
   doc:(s,si,x)=>`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>
     <table class="t"><tr><td colspan="2" class="hd">สถานที่ติดตั้งอุปกรณ์ ${esc(s.place.equipment)}</td></tr>${kv('ชื่ออาคาร/ชั้น',s.place.building)}${kv('ที่อยู่',s.place.address)}${kv('ห้อง/หมายเลขตู้',s.place.racks)}
     <tr><td colspan="2" class="hd">แผนผังห้องโดยสังเขป</td></tr><tr><td colspan="2" class="fig">${floorSVG(s.floor,false)}</td></tr></table>`,
-  md:(s,x)=>{let m=`\n### ${x.n}. ${x.t}\n\n**สถานที่ติดตั้งอุปกรณ์** ${s.place.equipment}\n\n${MDH}${[mdRow('ชื่ออาคาร/ชั้น',s.place.building),mdRow('ที่อยู่',s.place.address),mdRow('ห้อง/หมายเลขตู้',s.place.racks)].join('\n')}\n\n**แผนผังห้องโดยสังเขป** (${s.floor.orient==='v'?'แนวตั้ง':'แนวนอน'}; [x] = ตู้ที่ติดตั้ง)\n\n`;
-    s.floor.items.forEach(it=>{m+=it.type==='label'?`- _${it.text}_\n`:`- ${it.racks.map(r=>r.n?(r.on?`[${r.n}]`:r.n):'·').join(' | ')}\n`});return m},
+  md:(s,x)=>{let m=`\n### ${x.n}. ${x.t}\n\n**สถานที่ติดตั้งอุปกรณ์** ${mdL(s.place.equipment)}\n\n${MDH}${[mdRow('ชื่ออาคาร/ชั้น',s.place.building),mdRow('ที่อยู่',s.place.address),mdRow('ห้อง/หมายเลขตู้',s.place.racks)].join('\n')}\n\n**แผนผังห้องโดยสังเขป** (${s.floor.orient==='v'?'แนวตั้ง':'แนวนอน'}; [x] = ตู้ที่ติดตั้ง)\n\n`;
+    s.floor.items.forEach(it=>{m+=it.type==='label'?`- _${mdL(it.text)}_\n`:`- ${it.racks.map(r=>r.n?(r.on?`[${mdL(r.n)}]`:mdL(r.n)):'·').join(' | ')}\n`});return m},
   docx:async(s,x,c)=>{let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:x.pb,keep:1,before:200,after:120});
     const fp=await svgStrToPng(floorSVG(s.floor,false));let fimg='';
     if(fp){const m=c.addMedia(fp.url);fimg=c.pic(m.rid,fp.w,fp.h,560)}
     return b+c.tbl([c.span(c.run('สถานที่ติดตั้งอุปกรณ์ '+s.place.equipment,{b:1})),c.kvr('ชื่ออาคาร/ชั้น',s.place.building),c.kvr('ที่อยู่',s.place.address),c.kvr('ห้อง/หมายเลขตู้',s.place.racks),c.span(c.run('แผนผังห้องโดยสังเขป',{b:1})),c.span(fimg,'center')])}},
-{id:'racks',title:'ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ',label:'ตู้ Rack',en:'Racks, power, cabling',chip:'ตู้ Rack',page:true,pages:s=>s.racks.length,
+{id:'racks',title:'ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ',label:'ตู้ Rack',en:'Racks, power, cabling',chip:'ตู้ Rack',page:true,pages:s=>Math.max(1,s.racks.length),   // no racks → one page with the heading and a placeholder
   done:s=>{if(!s.racks.length)return 'empty';const st=s.racks.map(rackStat);return st.every(x=>x==='full')?'full':st.every(x=>x==='empty')?'empty':'part'},
   sum:s=>{const n=s.racks.reduce((a,r)=>a+Object.keys(devErrors(r)).length,0);return `${s.racks.length} ตู้`+(n?` · <span class="err-t">${n} ข้อผิดพลาด</span>`:'')},
   editor:(s,P,si)=>s.racks.map((r,ri)=>rackCard(r,ri,P,si)).join('')+`<div><button class="btn sm" type="button" data-act="rAdd" title="เพิ่มตู้ Rack · Add rack">${ic('plus')}เพิ่มตู้ Rack</button></div>`,
-  doc:(s,si,x)=>s.racks.map((r,i)=>`<div class="page" id="pv-${si}-racks-rack-${i}">${logoHTML()}${i===0?`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>`:''}
+  doc:(s,si,x)=>!s.racks.length?`<div class="page">${logoHTML()}<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5><div class="ph">${NO_RACKS}</div></div>`:s.racks.map((r,i)=>`<div class="page" id="pv-${si}-racks-rack-${i}">${logoHTML()}${i===0?`<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5>`:''}
     <table class="t"><tr><td colspan="2"><b>ข้อมูลจุดติดตั้ง ${esc(r.device)} ในตู้</b> ${esc(r.rack)}</td></tr>${kv('ห้อง/หมายเลขตู้',r.rack)}${kv('จำนวน Unit',unitsOf(r)+' Unit')}${kv('หมายเลข Unit',uLabel(r))}
     <tr><td colspan="2" class="fig">${rackSVG(r)}</td></tr>
     <tr><td colspan="2" class="hd">ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack</td></tr>${kv('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}${r.power.map((p,j)=>kv('แหล่งที่ '+(j+1),p)).join('')}
     <tr><td colspan="2" class="hd">ระยะและแนวการเดินสายสัญญาณ</td></tr>${r.cables.map(c=>`<tr><td class="k">${esc(c.type)}</td><td>${(c.text||'').split('\n').map(l=>`<span class="ln">${esc(l)}</span>`).join('')}</td></tr>`).join('')}</table></div>`).join(''),
-  md:(s,x)=>`\n### ${x.n}. ${x.t}\n`+s.racks.map(r=>
-    `\n#### ข้อมูลจุดติดตั้ง ${r.device} ในตู้ ${r.rack}\n\n${MDH}${[mdRow('ห้อง/หมายเลขตู้',r.rack),mdRow('จำนวน Unit',unitsOf(r)+' Unit'),mdRow('หมายเลข Unit',uLabel(r)),mdRow('ขนาดตู้',r.size+'U')].join('\n')}\n`+
-    `\nอุปกรณ์ในตู้: ${r.devices.map(d=>`${d.name} @ U${d.u}${+d.h>1?`–${+d.u+ +d.h-1}`:''}`).join(', ')}\n`+
+  md:(s,x)=>`\n### ${x.n}. ${x.t}\n`+(s.racks.length?'':`\n${NO_RACKS}\n`)+s.racks.map(r=>
+    `\n#### ข้อมูลจุดติดตั้ง ${mdL(r.device)} ในตู้ ${mdL(r.rack)}\n\n${MDH}${[mdRow('ห้อง/หมายเลขตู้',r.rack),mdRow('จำนวน Unit',unitsOf(r)+' Unit'),mdRow('หมายเลข Unit',uLabel(r)),mdRow('ขนาดตู้',r.size+'U')].join('\n')}\n`+
+    `\nอุปกรณ์ในตู้: ${r.devices.map(d=>`${mdL(d.name)} @ U${mdL(d.u)}${+d.h>1?`–${+d.u+ +d.h-1}`:''}`).join(', ')}\n`+
     `\n**ข้อมูลแหล่งจ่ายไฟฟ้าและ Outlet ในตู้ Rack**\n\n${MDH}${mdRow('จำนวนแหล่งจ่าย',r.power.length+' แหล่ง')}\n${r.power.map((p,j)=>mdRow('แหล่งที่ '+(j+1),p)).join('\n')}\n`+
     `\n**ระยะและแนวการเดินสายสัญญาณ**\n\n| สาย | รายละเอียด |\n|---|---|\n${r.cables.map(c=>mdRow(c.type,c.text)).join('\n')}\n`).join(''),
   docx:async(s,x,c)=>{let b='';
+    if(!s.racks.length)return c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:1,keep:1,after:120})+c.para(c.run(NO_RACKS,{color:'888888'}),{align:'center'});
     for(let i=0;i<s.racks.length;i++){const r=s.racks[i];
       b+=c.para(i===0?c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}):'',{style:i===0?'Heading2':null,pb:1,keep:1,after:120});
       const rp=await svgStrToPng(rackSVG(r));let rimg='';if(rp){const m=c.addMedia(rp.url);rimg=c.pic(m.rid,rp.w,rp.h,420)}
@@ -763,12 +802,12 @@ const SECTIONS=[
 {id:'diagram',title:'แผนภาพการเชื่อมต่ออุปกรณ์ระบบ',label:'แผนภาพการเชื่อมต่อ',en:'Connection diagram',chip:'แผนภาพ',page:true,pages:()=>1,
   done:s=>s.diagram.img?'full':filled(s.diagram.caption)?'part':'empty',
   sum:s=>s.diagram.img?'มีรูปแล้ว':'ยังไม่มีรูป',
-  editor:(s,P)=>{const im=diagImg(s);return `<div class="imgdrop">${im?`<img src="${im}" alt="แผนภาพการเชื่อมต่อ">`:'<span>ยังไม่มีแผนภาพ — อัปโหลดไฟล์ PNG หรือ JPG ที่ส่งออกจาก Visio, draw.io หรือ PowerPoint</span>'}
+  editor:(s,P)=>{const im=diagImg(s);return `<div class="imgdrop">${im?`<img src="${esc(im)}" alt="แผนภาพการเชื่อมต่อ">`:'<span>ยังไม่มีแผนภาพ — อัปโหลดไฟล์ PNG หรือ JPG ที่ส่งออกจาก Visio, draw.io หรือ PowerPoint</span>'}
       <div class="acts"><label class="btn sm filebtn">${im?'เปลี่ยนรูป':'อัปโหลดแผนภาพ'}<input type="file" accept="image/*" data-img="diagram"></label>${im?`<button class="btn sm del" type="button" data-act="rmDiag" title="ลบรูปแผนภาพ · Remove image">ลบรูป</button>`:''}</div></div>
     ${F('คำบรรยายภาพ / หมายเหตุ',P+'.diagram.caption',{en:'Caption / notes',area:1})}`},
-  doc:(s,si,x)=>{const im=diagImg(s);return `<div class="page">${logoHTML()}<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5><div class="diagram">${im?`<img src="${im}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`},
-  md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${diagImg(s)?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${s.diagram.caption}`:''}\n`,
-  docx:async(s,x,c)=>{const im=diagImg(s);let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
+  doc:(s,si,x)=>{const im=diagImg(s);return `<div class="page">${logoHTML()}<h5 id="${x.id}">${x.n}.&nbsp; ${x.t}</h5><div class="diagram">${im?`<img src="${esc(im)}" alt="Connection diagram">`:`<div class="ph">Connection diagram goes here</div>`}${s.diagram.caption?`<div class="cap">${esc(s.diagram.caption)}</div>`:''}</div></div>`},
+  md:(s,x)=>`\n### ${x.n}. ${x.t}\n\n${diagImg(s)?'(แนบรูปแผนภาพ)':'(ยังไม่มีแผนภาพ)'}${s.diagram.caption?`\n\n${mdT(s.diagram.caption)}`:''}\n`,
+  docx:async(s,x,c)=>{const im=await docxImg(diagImg(s));let b=c.para(c.run(`${x.n}.  ${x.t}`,{b:1,sz:24}),{style:'Heading2',pb:1,after:160});
     if(im){const sz=await imgSize(im);const m=c.addMedia(im);b+=c.para(c.pic(m.rid,sz.w,sz.h,640),{align:'center'})}
     else b+=c.para(c.run('(แนบแผนภาพการเชื่อมต่อ)',{color:'888888'}),{align:'center'});
     if(s.diagram.caption)b+=c.para(c.run(s.diagram.caption,{sz:18}),{align:'center'});
@@ -811,12 +850,12 @@ function sumOf(key){const s=site();
   return `<span class="name">${esc(r.rack||'Rack')}</span><span class="sumline">${r.device?`<span class="d">·</span><span class="mono">${esc(r.device)}</span>`:''}<span class="d">·</span><span><span class="mono">${used}U</span> ใช้</span><span class="d">·</span><span><span class="mono">${free}U</span> ว่าง</span>${errs?`<span class="d">·</span><span class="badge err" style="margin:0">${ic('warn','sm')}<span class="sr">คำเตือน </span>${errs}</span>`:''}</span>`}
 
 function card(key,k,def,id,num,label,en,body){
-  return `<details class="sec" id="${id}" data-k="${k}" data-nav="${key}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}><summary>${ic('chev','chev')}<span class="t"><span class="num">${num}</span>${label}<small>${en}</small></span><span class="sum" data-sum="${key}">${sumOf(key)}</span>${dotI(statusOf(key),` data-dot="${key}"`)}</summary><div class="sec-b">${body}</div></details>`}
+  return `<details class="sec" id="${id}" data-k="${esc(k)}" data-nav="${key}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}><summary>${ic('chev','chev')}<span class="t"><span class="num">${num}</span>${label}<small>${en}</small></span><span class="sum" data-sum="${key}">${sumOf(key)}</span>${dotI(statusOf(key),` data-dot="${key}"`)}</summary><div class="sec-b">${body}</div></details>`}
 
-function devRow(r,d,di,RP,E){const m=E[di],eid='de-'+d.id,u=`aria-describedby="${eid}"${m?' aria-invalid="true"':''}`;
+function devRow(r,d,di,RP,E){const m=E[di],eid=esc('de-'+d.id),u=`aria-describedby="${eid}"${m?' aria-invalid="true"':''}`;
   return `<tr class="dev${m?' err':''}" data-di="${di}"><td><input type="text" class="mono" data-b="${RP}.devices.${di}.name" value="${esc(d.name)}" aria-label="ชื่ออุปกรณ์ แถว ${di+1}" placeholder="เช่น NetScaler MPX9200"></td>
-    <td class="u"><input type="number" class="mono" inputmode="numeric" min="1" max="${r.size}" data-b="${RP}.devices.${di}.u" value="${esc(d.u)}" aria-label="U แถว ${di+1}" ${u}></td>
-    <td class="h"><input type="number" class="mono" inputmode="numeric" min="1" max="${r.size}" data-b="${RP}.devices.${di}.h" value="${esc(d.h)}" aria-label="ความสูง U แถว ${di+1}" ${u}></td>
+    <td class="u"><input type="number" class="mono" inputmode="numeric" min="1" max="${esc(r.size)}" data-b="${RP}.devices.${di}.u" value="${esc(d.u)}" aria-label="U แถว ${di+1}" ${u}></td>
+    <td class="h"><input type="number" class="mono" inputmode="numeric" min="1" max="${esc(r.size)}" data-b="${RP}.devices.${di}.h" value="${esc(d.h)}" aria-label="ความสูง U แถว ${di+1}" ${u}></td>
     <td class="a act"><button class="btn icon sm del ib" type="button" data-confirm="dDel" data-i="${RP.split('.').pop()}" data-j="${di}" aria-label="ลบอุปกรณ์ แถว ${di+1}" title="ลบอุปกรณ์ · Delete device">${ic('trash')}</button></td></tr>
     <tr class="errmsg"${m?'':' hidden'}><td colspan="4" id="${eid}">${m?ic('warn','sm')+esc(m):''}</td></tr>`}
 /* syncDevErr(ri): update the inline overlap/out-of-range errors in place while typing, so focus stays in the field. */
@@ -827,10 +866,10 @@ function syncDevErr(ri){const r=site().racks[ri],box=document.getElementById(`ed
 
 function rackCard(r,ri,P,si){
   const RP=`${P}.racks.${ri}`,E=devErrors(r),k='rack:'+r.id,nav='rack:'+ri,def=ri===0;
-  return `<details class="rack" id="ed-${si}-racks-rack-${ri}" data-k="${k}" data-nav="${nav}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}>
+  return `<details class="rack" id="ed-${si}-racks-rack-${ri}" data-k="${esc(k)}" data-nav="${nav}" data-def="${def?1:0}"${isOpen(k,def)?' open':''}>
     <summary>${ic('chev','chev')}<span class="rk-sum" data-sum="${nav}">${sumOf(nav)}</span>${dotI(rackStat(r),` data-dot="${nav}"`)}</summary>
     <div class="rack-b">
-      <div class="row3">${F('ชื่อตู้',RP+'.rack',{en:'Rack name'})}${F('อุปกรณ์หลัก',RP+'.device',{en:'Device · table heading',mono:1})}${F('ขนาด (U)',RP+'.size',{num:1,en:'Height'})}</div>
+      <div class="row3">${F('ชื่อตู้',RP+'.rack',{en:'Rack name'})}${F('อุปกรณ์หลัก',RP+'.device',{en:'Device · table heading',mono:1})}${F('ขนาด (U)',RP+'.size',{num:1,en:'Height',max:RACK_MAX,clamp:1})}</div>
       <div class="fld"><span class="lbl">อุปกรณ์ในตู้<small>Devices · U = ตำแหน่งต่ำสุดที่วางอยู่ นับจากล่าง</small></span>
         <div class="tblwrap"><table class="grid" aria-label="อุปกรณ์ในตู้ ${esc(r.rack)}"><thead><tr><th>ชื่ออุปกรณ์<small>Name</small></th><th class="u">U</th><th class="h">สูง<small>H</small></th><th class="a"><span class="sr">จัดการ</span></th></tr></thead>
           <tbody>${r.devices.map((d,di)=>devRow(r,d,di,RP,E)).join('')}</tbody></table>
@@ -934,7 +973,7 @@ function measure(){const h=id=>{const e=document.getElementById(id);return e&&ge
 
 /* ---------- document preview ---------- */
 function logoSrc(){return S.doc.logo===null||S.doc.logo===undefined?APJC_LOGO:imgURL(S.doc.logo)}
-function logoHTML(){const L=logoSrc();return `<div class="logo">${L?`<img src="${L}" alt="logo">`:`<span class="lt">${esc(S.doc.logoText||'')}</span>`}</div>`}
+function logoHTML(){const L=logoSrc();return `<div class="logo">${L?`<img src="${esc(L)}" alt="logo">`:`<span class="lt">${esc(S.doc.logoText||'')}</span>`}</div>`}
 const kv=(k,v)=>`<tr><td class="k">${esc(k)}</td><td>${esc(v).replace(/\n/g,'<br>')}</td></tr>`;
 function siteHTML(s,si){  // flow sections share the site's open page; page sections bring their own .page divs
   let h='',pg=`<div class="page" id="pv-${si}">${logoHTML()}<h2>${esc(s.name)}</h2>`;
@@ -959,8 +998,8 @@ function renderAll(){renderTabs();renderEditor();renderDoc()}
 
 /* ---------- markdown export ---------- */
 function toMarkdown(){
-  let m=`# ${S.doc.title}\n\n${S.doc.company}\n\n**ขอบเขตการสำรวจ**\n\n${S.sites.map(s=>'- '+s.name).join('\n')}\n`;
-  S.sites.forEach((s,si)=>{m+=`\n---\n\n## ${s.name}\n`+SECTIONS.map((sec,k)=>sec.md(s,secX(sec,k,si))).join('')});
+  let m=`# ${mdL(S.doc.title)}\n\n${mdL(S.doc.company)}\n\n**ขอบเขตการสำรวจ**\n\n${S.sites.map(s=>'- '+mdL(s.name)).join('\n')}\n`;
+  S.sites.forEach((s,si)=>{m+=`\n---\n\n## ${mdL(s.name)}\n`+SECTIONS.map((sec,k)=>sec.md(s,secX(sec,k,si))).join('')});
   return m;
 }
 
@@ -1059,9 +1098,11 @@ $('bJson').onclick=()=>{const js=exportJSON();
     `<button class="btn sm" type="button" id="jsCopy">คัดลอก</button><button class="btn sm primary" type="button" id="jsLoad">โหลด</button>`);
   const ta=$('jsOut');
   $('jsCopy').onclick=()=>copyText(ta.value,ta);
-  $('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
-  $('jsLoad').onclick=async()=>{let o;try{o=migrate(JSON.parse(ta.value));if(!o||!o.sites.length)throw 0}
-    catch(e){$('jsErr').textContent='นี่ไม่ใช่ไฟล์ JSON ของแบบสำรวจ ตรวจสอบว่าคัดลอกข้อความมาครบ';return}
+  $('jsFile').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>JSON_MAX){$('jsErr').textContent='ไฟล์ใหญ่เกินไป (สูงสุด 100 MB)';return}
+    const r=new FileReader();r.onload=()=>{ta.value=r.result};r.readAsText(f)};
+  $('jsLoad').onclick=async()=>{let o,nv=0;
+    try{const raw=parseJSON(ta.value);nv=newerV(raw);o=migrate(raw,{imported:true});if(!o||!o.sites.length)throw 0}
+    catch(e){$('jsErr').textContent=nv?`ไฟล์นี้มาจากตัวแก้ไขเวอร์ชันที่ใหม่กว่า (schema v${nv}, เวอร์ชันนี้รองรับถึง v${SCHEMA}) — เปิดด้วยตัวแก้ไขเวอร์ชันล่าสุด`:'นี่ไม่ใช่ไฟล์ JSON ของแบบสำรวจ ตรวจสอบว่าคัดลอกข้อความมาครบ';return}
     o.cur=0;await internImages(o);mutate(()=>{S=o});save();renderAll();closeModal();toast('โหลดฉบับร่างแล้ว')};
 };
 /* Reset: pick a start, then an explicit confirmation step (Cancel, "save JSON first", Confirm). Undo can bring the old draft back. */
@@ -1094,7 +1135,7 @@ function refreshFloor(){const f=document.getElementById('floorEd');if(!f)return;
 function toggleRack(el){const [i,j]=el.dataset.tog.split(':').map(Number);const rk=site().floor.items[i].racks[j];
   if(rk.n){mutate(()=>{rk.on=!rk.on});save();refreshFloor();renderDoc();updateChrome()}}
 ed.addEventListener('input',e=>{const t=e.target;
-  if(t.dataset.b){let v=t.value;if(t.type==='number')v=v===''?'':Math.max(1,parseInt(v,10)||1);beginEdit();setP(S,t.dataset.b,v);save();
+  if(t.dataset.b){let v=t.value;if(t.type==='number'){v=v===''?'':Math.max(1,parseInt(v,10)||1);if(v!==''&&t.hasAttribute('data-clamp')&&t.max)v=Math.min(v,+t.max)}beginEdit();setP(S,t.dataset.b,v);save();
     clearTimeout(liveT);liveT=setTimeout(()=>liveRefresh(t.dataset.b),150)}
   if(t.dataset.frow!=null){beginEdit();const it=site().floor.items[+t.dataset.frow];const old=it.racks;const names=t.value.split(',').map(x=>x.trim());
     it.racks=names.map((n,k)=>({n,on:!!(old.find(o=>o.n&&o.n===n)||{}).on}));save();
@@ -1105,10 +1146,14 @@ ed.addEventListener('change',e=>{const t=e.target;
   if(t.dataset.b&&(t.tagName==='SELECT'||t.type==='number')){clearTimeout(liveT);liveRefresh(t.dataset.b)}   // in place: no rebuild, so Tab keeps moving through the fields
   if(t.dataset.fitype!=null){const i=+t.dataset.fitype,it=site().floor.items[i];
     mutate(()=>{site().floor.items[i]=t.value==='row'?{id:it.id,type:'row',racks:[R('A1')]}:{id:it.id,type:'label',text:'Front'}});save();renderEditor();renderDoc()}
-  if(t.dataset.img){const f=t.files[0];if(!f)return;const kind=t.dataset.img,sd=site();shrink(f,kind==='logo'?400:1600).then(putImg).then(ref=>{
+  if(t.dataset.img){const f=t.files[0];if(!f)return;const kind=t.dataset.img,sd=site();
+    if(f.size>UPLOAD_MAX){toast('ไฟล์รูปใหญ่เกินไป (สูงสุด 30 MB)');return}
+    shrink(f,kind==='logo'?400:1600).then(putImg).then(ref=>{if(!ref){toast('เปิดไฟล์รูปนี้ไม่ได้ — ใช้ไฟล์ PNG หรือ JPG');return}
     mutate(()=>{if(kind==='logo')S.doc.logo=ref;else sd.diagram.img=ref});save();renderEditor();renderDoc()})}
 });
-function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+/* shrink(file, max): decode the upload in an <img> and re-encode it through a canvas, so only PNG/JPEG pixels are ever stored
+   (an uploaded SVG is rasterised, never kept as markup). Resolves '' when the file is not a readable image. */
+function shrink(file,max){return new Promise(res=>{const r=new FileReader();r.onerror=()=>res('');r.onload=()=>{const im=new Image();im.onerror=()=>res('');im.onload=()=>{
   const k=Math.min(1,max/Math.max(im.width,im.height));const c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);res(c.toDataURL(file.type==='image/png'?'image/png':'image/jpeg',.88))};im.src=r.result};r.readAsDataURL(file)})}
 
@@ -1176,7 +1221,7 @@ function doAct(a,i,j){const s=site(),fl=s.floor.items;
     case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();c.devices.forEach(d=>d.id=uid());c.cables.forEach(x=>x.id=uid());setOpen('rack:'+c.id,true);s.racks.splice(i+1,0,c);break}
     case 'rDel':s.racks.splice(i,1);break;
     case 'rUp':mv(s.racks,i,-1);break; case 'rDn':mv(s.racks,i,1);break;
-    case 'dAdd':{const r=s.racks[i],used=new Set();r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(u)for(let k=u;k<u+h;k++)used.add(k)});
+    case 'dAdd':{const r=s.racks[i],used=new Set();r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(u)for(let k=Math.max(u,1),t=Math.min(u+h-1,+r.size||0,RACK_MAX);k<=t;k++)used.add(k)});
       let u=r.devices.reduce((m,d)=>Math.max(m,(+d.u||0)+(+d.h||1)),0)||21;   // just above the highest device, as before
       if(u>r.size||used.has(u)){u=0;for(let k=1;k<=r.size&&!u;k++)if(!used.has(k))u=k;u=u||r.size}   // else the first free U
       r.devices.push({id:uid(),name:'',u,h:1});break}
@@ -1226,7 +1271,11 @@ function zipFiles(files){
 /* ---------- images ---------- */
 function dataUrlBytes(u){const [h,b]=u.split(',');const bin=atob(b);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
   return {bytes:a,ext:/image\/png/.test(h)?'png':'jpeg'}}
-function imgSize(u){return new Promise(r=>{const i=new Image();i.onload=()=>r({w:i.naturalWidth,h:i.naturalHeight});i.onerror=()=>r({w:400,h:300});i.src=u})}
+/* docxImg(u): the DOCX declares only PNG and JPEG parts, so a GIF/WebP image is re-encoded to PNG first ('' if it cannot be decoded). */
+function docxImg(u){u=safeImg(u);if(!u||/^data:image\/(png|jpe?g);/.test(u))return Promise.resolve(u);
+  return new Promise(res=>{const i=new Image();i.onerror=()=>res('');i.onload=()=>{const c=document.createElement('canvas');c.width=i.naturalWidth||1;c.height=i.naturalHeight||1;
+    c.getContext('2d').drawImage(i,0,0);res(safeImg(c.toDataURL('image/png')))};i.src=u})}
+function imgSize(u){return new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth>0&&i.naturalHeight>0?{w:i.naturalWidth,h:i.naturalHeight}:{w:400,h:300});i.onerror=()=>r({w:400,h:300});i.src=u})}
 function svgStrToPng(str,scale=2){return new Promise(res=>{
   const m=str.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);const w=+m[1],h=+m[2];
   const img=new Image();img.onload=()=>{const c=document.createElement('canvas');c.width=Math.round(w*scale);c.height=Math.round(h*scale);
@@ -1241,7 +1290,7 @@ async function buildDocx(){
   const pic=(rid,wpx,hpx,maxPx)=>{const k=Math.min(1,maxPx/wpx);const cx=Math.round(wpx*k*9525),cy=Math.round(hpx*k*9525);const id=pid++;
     return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="Picture ${id}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="img${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`};
   const rpr=o=>`<w:rPr>${o.b?'<w:b/><w:bCs/>':''}${o.color?`<w:color w:val="${o.color}"/>`:''}${o.sz?`<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>`:''}</w:rPr>`;
-  const run=(t,o={})=>String(t??'').split('\n').map(l=>`<w:r>${rpr(o)}<w:t xml:space="preserve">${esc(l)}</w:t></w:r>`).join('<w:r><w:br/></w:r>');
+  const run=(t,o={})=>String(t??'').split('\n').map(l=>`<w:r>${rpr(o)}<w:t xml:space="preserve">${xesc(l)}</w:t></w:r>`).join('<w:r><w:br/></w:r>');
   const para=(inner,o={})=>`<w:p><w:pPr>${o.style?`<w:pStyle w:val="${o.style}"/>`:''}${o.pb?'<w:pageBreakBefore/>':''}${o.keep?'<w:keepNext/>':''}${o.border?`<w:pBdr><w:top w:val="single" w:sz="12" w:space="8" w:color="${TEAL}"/><w:bottom w:val="single" w:sz="12" w:space="8" w:color="${TEAL}"/></w:pBdr>`:''}${o.tabs?`<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${W}"/></w:tabs>`:''}<w:spacing w:before="${o.before||0}" w:after="${o.after??80}"/>${o.ind?`<w:ind w:left="${o.ind}"/>`:''}${o.align?`<w:jc w:val="${o.align}"/>`:''}</w:pPr>${inner}</w:p>`;
   const K=3500,V=W-K;
   const cell=(inner,o={})=>`<w:tc><w:tcPr><w:tcW w:w="${o.w||(o.span?W:V)}" w:type="dxa"/>${o.span?'<w:gridSpan w:val="2"/>':''}</w:tcPr>${inner||'<w:p/>'}</w:tc>`;
@@ -1271,9 +1320,9 @@ async function buildDocx(){
       b+=await sec.docx(s,x,c)}
   }
   // header logo
-  const L=logoSrc();let hdr='';
+  const L=await docxImg(logoSrc());let hdr='';
   if(L){const sz=await imgSize(L);const {bytes,ext}=dataUrlBytes(L);media.push({file:'logo.'+ext,bytes,ext,rid:'rIdLogo',header:1});
-    const h=40,w=Math.round(sz.w*h/sz.h);hdr=para(pic('rIdLogo',w,h,w),{align:'right',after:0})}
+    const h=40,w=Math.round(sz.w*h/sz.h)||h;hdr=para(pic('rIdLogo',w,h,w),{align:'right',after:0})}
   else hdr=para(run(S.doc.logoText||'',{b:1,color:TEAL,sz:28}),{align:'right',after:0});
 
   const NS='xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
@@ -1290,12 +1339,12 @@ async function buildDocx(){
   const hdrRels=`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${media.filter(m=>m.header).map(m=>`<Relationship Id="${m.rid}" Type="${R}/image" Target="media/${m.file}"/>`).join('')}</Relationships>`;
   const ct=`${X}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>`;
   const rootRels=`${X}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`;
-  const core=`${X}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${esc(S.doc.title)}</dc:title><dc:creator>Rack Site Survey Editor</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().slice(0,19)}Z</dcterms:created></cp:coreProperties>`;
+  const core=`${X}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xesc(S.doc.title)}</dc:title><dc:creator>Rack Site Survey Editor</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().slice(0,19)}Z</dcterms:created></cp:coreProperties>`;
   return zipFiles([{name:'[Content_Types].xml',data:ct},{name:'_rels/.rels',data:rootRels},{name:'docProps/core.xml',data:core},{name:'word/document.xml',data:docXml},
     {name:'word/styles.xml',data:styles},{name:'word/header1.xml',data:hdrXml},{name:'word/_rels/document.xml.rels',data:docRels},{name:'word/_rels/header1.xml.rels',data:hdrRels},
     ...media.map(m=>({name:'word/media/'+m.file,data:m.bytes}))]);
 }
-const fileBase=()=>(S.doc.title||'Site Survey').replace(/[\\/:*?"<>|]+/g,' ').trim()+' '+new Date().toISOString().slice(0,10);
+const fileBase=()=>safeName(S.doc.title,'Site Survey')+' '+new Date().toISOString().slice(0,10);
 async function exportDocx(){const bs=[...document.querySelectorAll('.js-docx')];bs.forEach(b=>{b.disabled=true;b.querySelector('.lbl').textContent='กำลังสร้าง…'});
   try{const blob=await buildDocx();await saveFile(fileBase()+'.docx',blob,blob.type)}catch(err){toast('สร้างไฟล์ Word ไม่สำเร็จ: '+err.message)}
   bs.forEach(b=>{b.disabled=false;b.querySelector('.lbl').textContent='ดาวน์โหลด .docx'})}

@@ -6,6 +6,9 @@ node_modules/
 # secrets
 env.txt
 .env*
+*.pem
+*.key
+*.p12
 # test scratch: browser profiles / temp copies (the e2e runner uses the OS temp dir, these are a safety net)
 rsse-profile-*/
 rsse-e2e-*/

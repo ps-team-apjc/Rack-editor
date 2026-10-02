@@ -76,7 +76,7 @@ test('migrate: coerces bad scalar values', () => {
   const o = plain(T.migrate({doc: {title: 5, logo: 7, logoText: null}, sites: [{name: 12, floor: {orient: 'x', door: 'up'},
     racks: [{size: 0}, {size: -3}, {size: 'abc'}, {size: 24}], diagram: {img: '', caption: null}}]}));
   assert.equal(o.doc.title, '5');
-  assert.equal(o.doc.logo, '7');
+  assert.equal(o.doc.logo, '', 'a logo that is not a valid image becomes the text logo');
   assert.equal(o.doc.logoText, 'APJC');
   assert.equal(o.sites[0].name, '12');
   assert.equal(o.sites[0].floor.orient, 'h');

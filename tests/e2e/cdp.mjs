@@ -113,11 +113,13 @@ export async function launch(exe, {tmpRoot = os.tmpdir()} = {}) {
   }
 }
 
-/** In-page helpers: capture <a download> clicks (docx/json), read Markdown, load JSON through the real modal. */
+/** In-page helpers: capture <a download> clicks (docx/json), read Markdown, load JSON through the real modal.
+ *  Downloads are read from the Blob passed to URL.createObjectURL (not fetch(blob:)), because index.html's CSP has no connect-src. */
 export const HELPERS = `
 (()=>{if(window.__helpers)return;window.__helpers=1;
 const oc=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){if(this.download){window.__capName=this.download;window.__capHref=this.href;return}return oc.call(this)};
-window.__getDownload=async()=>{const b=await (await fetch(window.__capHref)).blob();const buf=new Uint8Array(await b.arrayBuffer());let s='';for(let i=0;i<buf.length;i+=0x8000)s+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));return {name:window.__capName,b64:btoa(s)}};
+const ou=URL.createObjectURL;window.__blobs={};URL.createObjectURL=function(b){const u=ou.call(URL,b);window.__blobs[u]=b;return u};
+window.__getDownload=async()=>{const b=window.__blobs[window.__capHref];const buf=new Uint8Array(await b.arrayBuffer());let s='';for(let i=0;i<buf.length;i+=0x8000)s+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));return {name:window.__capName,b64:btoa(s)}};
 window.__docx=async()=>{window.__capHref=null;document.getElementById('bDocx').click();for(let i=0;i<300&&!window.__capHref;i++)await new Promise(r=>setTimeout(r,50));return window.__getDownload()};
 window.__md=()=>{document.getElementById('bMd').click();const v=document.getElementById('mdOut').value;document.getElementById('modalRoot').innerHTML='';return v};
 window.__loadJson=(txt)=>{document.getElementById('bJson').click();document.getElementById('jsOut').value=txt;document.getElementById('jsLoad').click();return document.getElementById('jsErr')?.textContent||''};

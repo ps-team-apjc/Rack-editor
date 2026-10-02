@@ -2,13 +2,15 @@
 // Generates artifact.html (the claude.ai hosted build) from index.html (the offline build), applying the
 // documented differences from CLAUDE.md ("Keep the two HTML files in sync"):
 //   wrapper (no doctype/html/head/body, <title> first + Google Fonts links), fonts, no print CSS,
-//   localStorage key, SVG/Word font names, no Print button, no Download .md, no dl() helper (saveFile only).
+//   localStorage key, SVG/Word font names, no Print button, no Download .md, no dl() helper (saveFile only),
+//   no CSP meta (it lives in <head>, which the host owns). It also refreshes the CSP script hash in index.html.
 //
 //   node tools/port.mjs           write artifact.html
 //   node tools/port.mjs --check   exit 1 if artifact.html differs from the generated output
 //
 // Every replacement asserts how many times its anchor occurs, so a change in index.html that breaks an
 // anchor fails loudly instead of producing a half-ported file. Fix the anchor here when that happens.
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -76,9 +78,33 @@ export function port(indexHtml) {
   return s;
 }
 
+/**
+ * index.html carries a Content-Security-Policy <meta> whose script-src is the sha256 of its one inline <script>
+ * (so injected inline handlers / scripts cannot run). Any edit to the script changes the hash: withCsp() rewrites it.
+ * The browser hashes the parsed script text, i.e. with CRLF normalised to LF.
+ */
+export function cspHash(indexHtml) {
+  const s = indexHtml.replace(/\r\n/g, '\n');
+  const scripts = [...s.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  if (scripts.length !== 1) throw new Error(`csp: expected exactly 1 inline <script>, found ${scripts.length}`);
+  return 'sha256-' + crypto.createHash('sha256').update(scripts[0][1], 'utf8').digest('base64');
+}
+const CSP_RE = /(<meta http-equiv="Content-Security-Policy" content="[^"]*script-src ')sha256-[^']*(')/;
+export function withCsp(indexHtml) {
+  if (!CSP_RE.test(indexHtml)) throw new Error('csp: Content-Security-Policy meta with a script-src hash not found in index.html');
+  return indexHtml.replace(CSP_RE, `$1${cspHash(indexHtml)}$2`);
+}
+
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const out = port(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+  const src = path.join(ROOT, 'index.html');
+  const idx = fs.readFileSync(src, 'utf8'), fixed = withCsp(idx);
+  if (fixed !== idx) {
+    if (process.argv.includes('--check')) { console.error('index.html: the CSP script hash is stale. Run: node tools/port.mjs'); process.exit(1); }
+    fs.writeFileSync(src, fixed);
+    console.log('updated the CSP script hash in index.html');
+  }
+  const out = port(fixed);
   const dest = path.join(ROOT, 'artifact.html');
   if (process.argv.includes('--check')) {
     const cur = fs.readFileSync(dest, 'utf8').replace(/\r\n/g, '\n');

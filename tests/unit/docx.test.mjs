@@ -118,4 +118,8 @@ test('docx: blank site with no racks still builds valid XML', async () => {
   assert.doesNotThrow(() => checkXml(d));
   assert.equal(count(d, /<w:tbl>/g), 2);
   assert.ok(PNG_1x1);
+  // section 3 still has its Heading2 (so the TOC entry points at something) and a placeholder
+  assert.equal(count(d, /<w:pStyle w:val="Heading2"\/>/g), 4);
+  assert.ok(wText(d).includes('3.  ข้อมูลจุดติดตั้งในตู้ Rack'));
+  assert.ok(wText(d).includes('(ยังไม่มีข้อมูลตู้ Rack)'));
 });

@@ -1,11 +1,11 @@
 // Escaping of user text in the preview HTML strings and in the DOCX XML.
-// Tests marked `todo` document escaping gaps that exist today. They are reported, not fixed here; a separate
-// security review owns the fixes. When a fix lands, drop the `todo` option so the test guards it.
+// The broader attack-surface tests (malicious JSON, image schemes, prototype pollution, DoS) are in security.test.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadApp, loadSample} from '../helpers/load-app.mjs';
 import {unzip, blobBytes} from '../helpers/zip.mjs';
 import {checkXml, wText} from '../helpers/xml.mjs';
+import {unsafeMarkup} from '../helpers/html.mjs';
 
 const T = loadApp();
 const EVIL = `<script>alert(1)</script> & "q" 'a'`;
@@ -69,29 +69,42 @@ test('editor HTML: values in inputs/textareas are escaped', () => {
   assert.ok(h.includes(`<textarea data-b="sites.0.racks.0.cables.0.text"`));
 });
 
-test("preview HTML: single quotes are entity-encoded (esc() leaves ' as is)", {todo: "esc() encodes & < > \" but not ' — harmless today (no single-quoted attributes), defence in depth"}, () => {
+test("preview HTML: single quotes are entity-encoded", () => {
   evilState();
   const h = T.docHTML().h;
   assert.ok(!h.includes("'a'"), "raw ' in output");
+  assert.ok(h.includes('&#39;a&#39;'));
+  assert.equal(T.esc(`<a href='x'>&"`), '&lt;a href=&#39;x&#39;&gt;&amp;&quot;');
 });
 
-test('preview HTML: diagram image / logo refs cannot break out of src="…"', {todo: 'XSS: migrate() keeps any string in diagram.img / doc.logo and imgURL() returns it verbatim into <img src="…"> (imported JSON)'}, () => {
+test('preview HTML: diagram image / logo refs cannot break out of src="…"', () => {
   loadSample(T);
   const payload = 'x" onerror="alert(1)';
   T.S = T.migrate({...JSON.parse(JSON.stringify(T.S)), doc: {...T.S.doc, logo: payload}});
-  T.S.sites[0].diagram.img = payload;
+  assert.equal(T.S.doc.logo, '', 'invalid logo → text logo');
+  T.S.sites[0].diagram.img = payload;               // even when set directly (bypassing migrate), imgURL() drops it
   const h = T.docHTML().h;
   noRawMarkup(h);
+  assert.ok(!h.includes('alert(1)'));
+  const ed = T.SECTIONS.find((x) => x.id === 'diagram').editor(T.S.sites[0], 'sites.0', 0);
+  noRawMarkup(ed);
+  assert.ok(!ed.includes('<img'), 'no image shown for an invalid ref');
 });
 
-test('editor HTML: ids from imported JSON cannot break out of attributes', {todo: 'XSS: device/rack/site ids are interpolated unescaped (id="de-…", aria-describedby, data-k="rack:…"); migrate() keeps any string id'}, () => {
+test('editor HTML: ids from imported JSON cannot break out of attributes', () => {
   loadSample(T);
   const o = JSON.parse(JSON.stringify(T.S));
   o.sites[0].racks[0].id = 'r" onmouseover="alert(1)';
   o.sites[0].racks[0].devices[0].id = 'd" onfocus="alert(1)';
   T.S = T.migrate(o);
+  assert.match(T.S.sites[0].racks[0].id, /^[A-Za-z0-9_-]+$/);
+  assert.match(T.S.sites[0].racks[0].devices[0].id, /^[A-Za-z0-9_-]+$/);
   const h = T.rackCard(T.S.sites[0].racks[0], 0, 'sites.0', 0);
   noRawMarkup(h);
+  // and if an unsafe id ever reached a render directly, the attribute is still escaped
+  const r = JSON.parse(JSON.stringify(T.S.sites[0].racks[0]));
+  r.id = 'r" onmouseover="alert(1)'; r.devices[0].id = 'd" onfocus="alert(1)';
+  assert.deepEqual(unsafeMarkup(T.rackCard(r, 0, 'sites.0', 0)).filter((x) => !/[(id|data-k|aria-describedby)]/.test(x)), []);
 });
 
 test('DOCX XML: escaped, well-formed, and the text round-trips exactly', async () => {
