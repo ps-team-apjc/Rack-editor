@@ -1,0 +1,15 @@
+{
+  "name": "rack-site-survey-editor",
+  "private": true,
+  "description": "Single-file browser tool for data-center site survey documents. Scripts only, no dependencies.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tests/unit/*.test.mjs\" \"tests/golden/*.test.mjs\"",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "port": "node tools/port.mjs",
+    "port:check": "node tools/port.mjs --check",
+    "golden:update": "node tests/golden/golden.test.mjs --update"
+  }
+}

@@ -1173,7 +1173,7 @@ function doAct(a,i,j){const s=site(),fl=s.floor.items;
     case 'fAddRow':fl.push({id:uid(),type:'row',racks:[R('A1'),R('A2'),R('A3')]});break;
     case 'fAddLbl':fl.push({id:uid(),type:'label',text:'Front'});break;
     case 'rAdd':{const nr=blankRack();s.racks.push(nr);setOpen('rack:'+nr.id,true);break}   // UI state, not undoable: the new rack opens
-    case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();setOpen('rack:'+c.id,true);s.racks.splice(i+1,0,c);break}
+    case 'rDup':{const c=JSON.parse(JSON.stringify(s.racks[i]));c.id=uid();c.devices.forEach(d=>d.id=uid());c.cables.forEach(x=>x.id=uid());setOpen('rack:'+c.id,true);s.racks.splice(i+1,0,c);break}
     case 'rDel':s.racks.splice(i,1);break;
     case 'rUp':mv(s.racks,i,-1);break; case 'rDn':mv(s.racks,i,1);break;
     case 'dAdd':{const r=s.racks[i],used=new Set();r.devices.forEach(d=>{const u=+d.u,h=+d.h||1;if(u)for(let k=u;k<u+h;k++)used.add(k)});

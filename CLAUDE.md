@@ -16,10 +16,15 @@ works offline.
 | `artifact.html` | The same app as published to a claude.ai Artifact. There is no `<html>/<head>/<body>` (the host adds the skeleton) and it loads Google Fonts. Downloads go through `window.claude.use('downloads')`. The page has no Print button (the host frame blocks `window.print`). |
 | `sample.json` | Exported state with the two sample sites (NT Data Center Sriracha, NT Data Center Bangkok). Load it with **Export ▾ → Load JSON** to get the sample data back. |
 | `docs/design-mockup.html` | The approved static UI design (tokens, rail, device table, toast, mobile). Reference only; the real UI is in the two app files. |
+| `tools/port.mjs` | Generates `artifact.html` from `index.html` (applies the differences in the table below). |
+| `tests/` | Automated tests (see **How to test**): `unit/`, `golden/`, `e2e/`, `helpers/`, `fixtures/`. |
+| `package.json` | npm scripts only. There are no dependencies; plain `node` (≥ 22) runs everything. |
 | `CLAUDE.md` | This file. |
 
 **Keep the two HTML files in sync.** Apart from the differences below, the code is identical.
-When you change features, edit `index.html` first and port the change to `artifact.html`.
+When you change features, edit `index.html` only, then run `node tools/port.mjs` to regenerate `artifact.html`.
+Never hand-edit `artifact.html`: `tests/unit/port.test.mjs` fails when it differs from the generator output.
+If a change to `index.html` breaks one of the generator's anchors, `port.mjs` throws and names it; update the anchor in `tools/port.mjs`.
 
 | Area | `index.html` (offline) | `artifact.html` (hosted) |
 |---|---|---|
@@ -175,24 +180,37 @@ has light and dark tokens on `:root`.
   - Use `saveFile()` for downloads, and wrap all storage in try/catch.
 - Thai text: keep the `cs` font and `szCs` size in DOCX runs (`w:cs`, `w:szCs`), or Thai will render in the wrong font or size.
 - Images live in IndexedDB, and `S` holds `idb:` refs. Only the IDB fallback keeps data URLs inline, and localStorage holds about 5 MB. On quota errors, `save()` shows "Not saved here — use Save / load JSON" plus the persistent `#saveBanner`.
-- Preview, Markdown and DOCX output must stay the same when internals are refactored. Compare before/after (preview `innerHTML` with `id` attributes stripped, Markdown text, and every DOCX part except `docProps/core.xml`).
+- Preview, Markdown and DOCX output must stay the same when internals are refactored. Compare before/after (preview `innerHTML` with `id` attributes stripped, Markdown text, and every DOCX part except `docProps/core.xml`). `npm test` does the Markdown + DOCX part of this against `tests/golden/`.
 
 ## How to test
 
+No dependencies and no installs: everything runs on plain Node ≥ 22 (`node:test`, `node:vm`, built-in `fetch`/`WebSocket`).
+
 ```bash
-# Headless smoke test (Playwright): load, click Download .docx, validate the zip/XML
-node -e "
-const {chromium}=require('playwright');(async()=>{const b=await chromium.launch();
-const p=await b.newPage({acceptDownloads:true});const errs=[];p.on('pageerror',e=>errs.push(e.message));
-await p.goto('file://'+process.cwd()+'/index.html');
-const [d]=await Promise.all([p.waitForEvent('download'),p.click('#bDocx')]);await d.saveAs('out.docx');
-console.log(errs.length?errs:'ok');await b.close()})()"
-python3 -c "import docx;d=docx.Document('out.docx');print(len(d.tables),'tables',len(d.inline_shapes),'images')"
-soffice --headless --convert-to pdf out.docx   # visual check; sample data → 12 pages
+npm test                 # unit + golden (~2 s, no browser)
+                         #   = node --test "tests/unit/*.test.mjs" "tests/golden/*.test.mjs"
+npm run test:e2e         # browser e2e on index.html AND artifact.html (~90 s) = node tests/e2e/run.mjs
+npm run port             # regenerate artifact.html from index.html   = node tools/port.mjs
+npm run port:check       # exit 1 if artifact.html is out of sync     = node tools/port.mjs --check
+npm run golden:update    # regenerate tests/golden/ (only for intended output changes; review the diff)
+                         #   = node tests/golden/golden.test.mjs --update
 ```
+
+Run one file: `node --test tests/unit/docx.test.mjs`. Note that `node --test tests/unit` (a bare directory) does not work on Node 22; use the glob.
+
+- **Unit tests** (`tests/unit/`): `tests/helpers/load-app.mjs` takes the IIFE source out of `index.html` (or `artifact.html`), appends `globalThis.__T={...internals}` **in memory only**, and runs it in `node:vm` with a tiny fake browser (anything-goes DOM proxies, in-memory `localStorage`, no-op timers, an `Image` that reads PNG/JPEG/SVG sizes, a canvas that returns a 1×1 PNG). The shipped files are never modified for tests. To test another internal function, add its name to `EXPOSE` in `load-app.mjs`; `T.S` gets and sets the app state.
+  - Coverage: `migrate()`/startup load, `unitsOf`/`uLabel`/`devErrors`/`rackStat`, factories, `doAct` actions, `toMarkdown()`, `crc32`/`zipFiles` (read back with `tests/helpers/zip.mjs`), `buildDocx()` (well-formed XML via `tests/helpers/xml.mjs`, Thai `w:cs`/`w:szCs`, 10 tables, images), the `SECTIONS` registry, `pagePlan()` (12 pages), escaping, and the port sync (`port.test.mjs`).
+  - Tests marked `todo` are known gaps that are reported but not fixed yet (the escaping/XSS items in `escaping.test.mjs`). When you fix one, remove its `todo` option so the test then guards the fix.
+- **Golden files** (`tests/golden/`): `sample.md` and every DOCX part of `sample.json` except `docProps/core.xml` (timestamp). `docx/media.json` lists the media: as-is images by sha256, and rasterised SVG drawings as `"raster"` (name only, because pixels depend on the renderer). The vm build and the real browser must produce byte-identical Markdown and XML (the e2e `golden` suite checks the browser side).
+- **Browser e2e** (`tests/e2e/run.mjs`, driver `tests/e2e/cdp.mjs`): finds Chrome/Edge/Chromium automatically (override with `CHROME_PATH=…` or `--browser …`) and prints `SKIP` (exit 0) if none is installed. Each suite gets a fresh temp profile and a random DevTools port, and the browser is always killed. The pages are copied to a temp dir, and `artifact.html` gets a viewport `<meta>` there because the host page supplies it. Suites: `behaviour` (storage, migration, undo/redo, IndexedDB images, import/export, quota banner, GC), `ui` (card state, focus/scroll, rail + scroll-spy, delete arming, tabs, modal, floor cells, device table, reset, phone layout) and `golden`. Options: `--only index|artifact`, `--suite behaviour|ui|golden`.
+- Visual check of the DOCX when needed: `soffice --headless --convert-to pdf <file>.docx` (sample data → 12 pages).
 
 ## Known limits and ideas for next steps
 
+- Open issues found by the test suite:
+  - Escaping (`todo` tests in `tests/unit/escaping.test.mjs`): image refs (`diagram.img`, `doc.logo`) and ids from imported JSON reach HTML attributes unescaped (XSS via a crafted JSON file). `esc()` does not encode `'`.
+  - A site with no racks still lists section 3 in the TOC (same page number as section 4), and the DOCX has no section-3 heading.
+  - `migrate()` stamps `v: 2` on a file from a newer schema (`v > 2`) instead of refusing or keeping it.
 - The TOC page numbers are computed, not a Word TOC field. They drift when a rack table overflows a page. Option: emit a real `TOC \o "1-2"` field and let Word update it.
 - The connection diagram is image upload only. A built-in diagram editor (switches ↔ devices, link labels like "10G-SR") would be a natural next feature.
 - Ideas:
