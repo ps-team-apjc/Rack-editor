@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rack Site Survey Editor - UI mockup</title>
+<style>
+:root{
+  --bg:#F3F4F5; --surface:#FFFFFF; --surface-2:#F8F9FA; --hover:#EEF0F2; --fg:#1B1F23; --muted:#5C6870; --faint:#8A949B; --line:#DADFE3; --line-strong:#C3CBD1;
+  --accent:#1A5E80; --accent-fg:#FFFFFF; --accent-text:#1A5E80; --accent-soft:#E3EEF3;
+  --dev:#0E7C86;
+  --danger:#B3261E; --danger-bg:#FCEDEC; --warn:#8A5A00; --warn-bg:#FFF4D9; --ok:#1E7A4C;
+  --toast-bg:#1B1F23; --toast-fg:#F3F4F5; --toast-link:#8FD0EC;
+  --shadow-pop:0 6px 20px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.04);
+  --ui:"Leelawadee UI","Segoe UI","Noto Sans Thai",Tahoma,sans-serif;
+  --mono:Consolas,"Cascadia Mono",ui-monospace,monospace;
+  --r:5px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101315; --surface:#171B1E; --surface-2:#1C2125; --hover:#232A2F; --fg:#E6EAED; --muted:#99A5AD; --faint:#6F7B83; --line:#2A3137; --line-strong:#3A444C;
+  --accent:#1A5E80; --accent-text:#7CC0E0; --accent-soft:#18303B;
+  --danger:#F28B82; --danger-bg:#331C1B; --warn:#EAB45A; --warn-bg:#33290F; --ok:#6BCB98;
+  --toast-bg:#E6EAED; --toast-fg:#171B1E; --toast-link:#1A5E80;
+  --shadow-pop:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101315; --surface:#171B1E; --surface-2:#1C2125; --hover:#232A2F; --fg:#E6EAED; --muted:#99A5AD; --faint:#6F7B83; --line:#2A3137; --line-strong:#3A444C;
+  --accent:#1A5E80; --accent-text:#7CC0E0; --accent-soft:#18303B;
+  --danger:#F28B82; --danger-bg:#331C1B; --warn:#EAB45A; --warn-bg:#33290F; --ok:#6BCB98;
+  --toast-bg:#E6EAED; --toast-fg:#171B1E; --toast-link:#1A5E80;
+  --shadow-pop:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.6 var(--ui);font-variant-numeric:tabular-nums}
+button,input,textarea,select{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-size:13px}
+.ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+:focus-visible{outline:2px solid var(--accent-text);outline-offset:1px}
+
+/* mockup-only control strip */
+.mk{display:flex;gap:8px;align-items:center;padding:8px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);background:var(--surface-2)}
+.mk b{color:var(--fg);font-weight:600;margin-right:6px}
+.mk button{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r);padding:2px 10px;cursor:pointer;font-size:12px}
+.mk button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* app frame */
+.app{display:grid;grid-template-rows:48px 1fr;height:860px;min-width:1280px;border-bottom:1px solid var(--line-strong);position:relative;background:var(--bg)}
+.top{display:flex;align-items:center;gap:12px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--line);position:relative}
+.brand{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--muted);white-space:nowrap}
+.brand .mark{width:20px;height:20px;border-radius:4px;background:var(--accent);display:grid;place-items:center;color:#fff}
+.brand .mark svg{width:13px;height:13px}
+.sep-v{width:1px;height:20px;background:var(--line)}
+input.doc-title{border:1px solid transparent;background:transparent;border-radius:var(--r);padding:2px 8px;font-weight:600;width:150px;height:28px}
+.doc-title:hover{border-color:var(--line)}
+.tabs{display:flex;align-items:center;gap:2px;margin-left:4px;height:100%}
+.tab{display:flex;align-items:center;gap:6px;height:100%;padding:0 12px;border:0;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;font-size:13px;white-space:nowrap}
+.tab:hover{color:var(--fg);background:var(--hover)}
+.tab[aria-selected=true]{color:var(--fg);border-bottom-color:var(--accent-text);font-weight:600}
+.tab .x{opacity:0;width:14px;height:14px}
+.tab:hover .x,.tab[aria-selected=true] .x{opacity:.6}
+.tab.add{padding:0 8px}
+.spacer{flex:1}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.status i{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r);cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn.primary:hover{filter:brightness(1.12)}
+.btn.icon{width:28px;padding:0;justify-content:center;border-color:transparent;background:transparent;color:var(--muted)}
+.btn.icon:hover{background:var(--hover);color:var(--fg)}
+.btn.icon[disabled]{opacity:.4;cursor:default}
+.btn.sm{height:24px;padding:0 8px;font-size:12px}
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:34px;width:290px;padding:4px;background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);box-shadow:var(--shadow-pop);z-index:20;display:none}
+.menu.open{display:block}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;height:30px;padding:0 8px;border:0;background:none;border-radius:4px;cursor:pointer;text-align:left;font-size:13px}
+.menu button:hover,.menu button.hl{background:var(--hover)}
+.menu button{white-space:nowrap}.menu button .k{margin-left:auto;color:var(--muted);font-size:12px}
+.menu button{height:32px}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.menu .danger{color:var(--danger)}
+
+.body{display:grid;grid-template-columns:220px minmax(520px,600px) 1fr;min-height:0}
+/* rail */
+.rail{border-right:1px solid var(--line);background:var(--surface);padding:12px 8px;overflow:auto}
+.rail h6{margin:0 8px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+.rail .site{margin:0 8px 10px;font-size:12px;color:var(--muted)}
+.rail .site b{display:block;color:var(--fg);font-size:13px}
+.nav{list-style:none;margin:0;padding:0}
+.nav a{display:flex;align-items:center;gap:8px;min-height:30px;padding:3px 8px;border-radius:var(--r);color:var(--fg);text-decoration:none;font-size:13px}
+.nav a:hover{background:var(--hover)}
+.nav a[aria-current=true]{background:var(--accent-soft);color:var(--accent-text);font-weight:600}
+.tx{display:flex;flex-direction:column;line-height:1.3;min-width:0}.tx small{font-size:11px;color:var(--muted);font-weight:400}.nav a[aria-current=true] .tx small{color:var(--accent-text);opacity:.8}.nav a{align-items:center}
+.nav .n{width:14px;color:var(--faint);font:12px var(--mono);text-align:right}
+.nav .sub{padding-left:22px}
+.nav .sub a{font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;margin-left:auto;border:1.5px solid var(--faint)}
+.dot.full{background:var(--ok);border-color:var(--ok)}
+.dot.part{border-color:var(--warn);background:var(--warn);box-shadow:inset 0 0 0 1.5px var(--surface)}
+.badge{display:inline-flex;align-items:center;gap:4px;height:18px;padding:0 6px;border-radius:9px;font-size:11px;font-weight:600;background:var(--warn-bg);color:var(--warn);margin-left:auto}
+.badge.err{background:var(--danger-bg);color:var(--danger)}
+.legend{margin:14px 8px 0;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:grid;gap:4px}
+.legend>span{display:flex;align-items:center;gap:8px}
+.legend .dot{margin:0}.legend .tx{flex-direction:row;gap:6px;align-items:baseline}
+
+/* form */
+.form{overflow:auto;padding:12px 16px 80px;border-right:1px solid var(--line)}
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:6px;margin-bottom:8px}
+.sec-h{display:flex;align-items:center;gap:8px;min-height:38px;padding:6px 10px;cursor:pointer}
+.sec-h .chev{color:var(--muted);transition:transform .1s}
+.sec.open>.sec-h .chev{transform:rotate(90deg)}
+.sec-h .t{font-weight:600}
+.sec-h .t small{font-weight:400;color:var(--muted);margin-left:6px}
+.sec-h .sum{margin-left:auto;color:var(--muted);font-size:12px;display:flex;gap:10px;align-items:center}
+.sec-b{border-top:1px solid var(--line);padding:12px}
+.sec.focus{border-color:var(--line-strong)}
+.group-h{display:flex;align-items:baseline;gap:8px;margin:14px 2px 6px}
+.group-h h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.group-h span{font-size:12px;color:var(--faint)}
+.rack{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);margin-bottom:8px}
+.rack.open{border-color:var(--accent-text)}
+.rack-h{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;min-height:40px}
+.rack-h .name{font-weight:600}
+.rack-h .sumline{color:var(--muted);font-size:12.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rack-h .sumline .d{color:var(--line-strong)}
+.rack-b{border-top:1px solid var(--line);padding:12px;display:grid;gap:14px}
+.fld{display:grid;gap:4px}
+.fld>label,.lbl{font-size:12.5px;font-weight:600}
+.lbl small,.fld>label small{font-weight:400;color:var(--muted);margin-left:4px}
+.row2{display:grid;grid-template-columns:1fr 1fr 96px;gap:10px}
+input[type=text],input[type=number],textarea,select{width:100%;height:30px;padding:3px 8px;border:1px solid var(--line-strong);border-radius:var(--r);background:var(--surface);min-width:0}
+textarea{height:auto;min-height:74px;resize:vertical;line-height:1.55;padding:6px 8px}
+input:hover,textarea:hover{border-color:var(--faint)}
+input:focus,textarea:focus{outline:2px solid var(--accent-text);outline-offset:-1px;border-color:var(--accent-text)}
+.hint{font-size:12px;color:var(--muted)}
+.hint.warn{color:var(--warn)}
+
+/* device table */
+table.grid{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden}
+.grid th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:4px 8px;border-bottom:1px solid var(--line-strong)}
+.grid td{padding:0;border-bottom:1px solid var(--line);vertical-align:top;background:var(--surface)}
+.grid tr:last-child td{border-bottom:0}
+.grid td input{border:0;border-radius:0;height:32px;background:transparent}
+.grid td input:focus{outline-offset:-2px}
+.grid td+td,.grid th+th{border-left:1px solid var(--line)}
+.grid .u{width:84px}.grid .h{width:84px}.grid .a{width:76px}
+.grid td.act{display:flex;align-items:center;justify-content:center;gap:0;height:32px;border-left:1px solid var(--line)}
+.grid tr.err td{background:var(--danger-bg)}
+.grid tr.err td.inputcell{box-shadow:inset 0 0 0 1px var(--danger)}
+.grid tr.errmsg td{padding:3px 8px 5px;font-size:12px;color:var(--danger);background:var(--danger-bg);border-top:0}
+.grid tr.errmsg td svg{vertical-align:-2px;margin-right:6px}.grid tr.errmsg td{border-left:0}
+.grid tr.errmsg{display:table-row}
+.errmsg td{width:100%}
+.addrow{display:flex;align-items:center;gap:6px;width:100%;height:30px;padding:0 8px;background:var(--surface-2);border:0;border-top:1px solid var(--line);color:var(--accent-text);cursor:pointer;font-size:13px}
+.addrow:hover{background:var(--hover)}
+.tblwrap{border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden}
+.tblwrap table.grid{border:0;border-radius:0}
+
+.plist{display:grid;gap:6px}
+.prow{display:grid;grid-template-columns:22px 1fr 28px;gap:6px;align-items:center}
+.prow .i{font:12px var(--mono);color:var(--muted);text-align:right}
+.btn.del{color:var(--muted)}
+.btn.del:hover{color:var(--danger);background:var(--danger-bg)}
+.btn.arm{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:600;padding:0 10px;width:auto}
+:root[data-theme="dark"] .btn.arm{color:#1a0b0a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.arm{color:#1a0b0a}}
+.cable{border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);padding:10px;display:grid;gap:8px}
+.cable-h{display:flex;gap:8px;align-items:center}
+.foot-actions{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.foot-actions .sp{flex:1}
+.hint-key{display:inline-block;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:3px;padding:0 4px;font:11px var(--mono);color:var(--muted)}
+
+/* preview */
+.prev{background:var(--bg);display:flex;flex-direction:column;min-width:0;min-height:0}
+.prev-bar{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--surface);font-size:12px;color:var(--muted)}
+.prev-bar .pg{margin-left:auto;display:flex;align-items:center;gap:2px}
+.prev-bar .pg b{color:var(--fg);font-weight:600;padding:0 6px}
+.prev-scroll{flex:1;overflow:auto;padding:20px;display:flex;justify-content:center;align-items:flex-start}
+.paper{width:560px;height:792px;flex:none;background:#fff;color:#1C1C1C;border:1px solid #cfd5d9;position:relative;padding:34px 40px;font-family:var(--ui);font-size:10px;line-height:1.5}
+.paper .logo{position:absolute;right:40px;top:26px;font:700 13px var(--ui);color:#1A5E80;letter-spacing:.08em;border:1.5px solid #1A5E80;padding:0 6px;border-radius:2px}
+.paper h2{margin:34px 0 8px;font-size:11.5px;color:#1A5E80;font-weight:700}
+.paper table{width:100%;border-collapse:collapse;border:1px solid #3A3A3A}
+.paper td,.paper th{border:1px solid #3A3A3A;padding:3px 7px;vertical-align:top;text-align:left;font-size:10px}
+.paper th{background:#E6EEF2;font-weight:700}
+.paper td:first-child{width:128px;font-weight:600}
+.paper .rackcell{text-align:center;padding:6px}
+.paper .pn{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:9px;color:#666}
+.hl-box{outline:2px solid rgba(26,94,128,.0)}
+
+/* toast */
+.toast{position:absolute;left:12px;bottom:16px;display:flex;align-items:center;gap:12px;background:var(--toast-bg);color:var(--toast-fg);border-radius:var(--r);padding:8px 8px 8px 14px;box-shadow:var(--shadow-pop);z-index:10;font-size:13px}
+.toast button{border:0;background:none;color:var(--toast-link);font-weight:600;cursor:pointer;padding:2px 8px;border-radius:4px;font-size:13px}
+.toast button:hover{text-decoration:underline}
+.toast .close{color:inherit;opacity:.6;display:grid;place-items:center;padding:4px}
+.toast .t-ic{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
+
+/* mobile */
+.mob-wrap{padding:24px 16px 48px;display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap}
+.cap{font-size:12px;color:var(--muted);margin:0 0 8px}
+.phone{width:375px;height:760px;border:1px solid var(--line-strong);background:var(--bg);display:flex;flex-direction:column;overflow:hidden;position:relative;border-radius:var(--r)}
+.m-top{display:flex;align-items:center;gap:4px;height:48px;padding:0 8px 0 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.m-top .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.m-top .t small{display:block;font-size:11px;color:var(--muted);font-weight:400;line-height:1.1}
+.m-sites{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--line);overflow:auto}
+.m-sites .tab{height:36px;font-size:12.5px}
+.seg{display:grid;grid-template-columns:1fr 1fr;margin:8px 12px;border:1px solid var(--line-strong);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.seg button{height:32px;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:13px}
+.seg button+button{border-left:1px solid var(--line-strong)}
+.seg button[aria-pressed=true]{background:var(--accent);color:#fff;font-weight:600}
+.m-body{flex:1;overflow:auto;padding:0 12px 70px}
+.m-sec{display:flex;gap:6px;overflow:auto;margin:0 -12px 8px;padding:0 12px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);font-size:12.5px;white-space:nowrap}
+.chip[aria-current=true]{background:var(--accent-soft);color:var(--accent-text);border-color:var(--accent-text);font-weight:600}
+.m-bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px 12px;background:var(--surface);border-top:1px solid var(--line)}
+.m-bar .btn{flex:1;justify-content:center;height:36px}
+.m-bar .btn.icon{flex:none;width:36px;border-color:var(--line-strong)}
+.m-bar .btn.primary{flex:2}
+.m-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin:0 0 8px}
+.m-status i{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-undo" viewBox="0 0 16 16"><path d="M5.5 3 2.5 6l3 3"/><path d="M2.5 6H9a4.5 4.5 0 0 1 0 9H6"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 16 16"><path d="M10.5 3l3 3-3 3"/><path d="M13.5 6H7a4.5 4.5 0 0 0 0 9h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.6 8.5h6.8l.6-8.5M6.5 7v4M9.5 7v4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+  <symbol id="i-print" viewBox="0 0 16 16"><path d="M4.5 6V2.5h7V6M4.5 11.5h-2v-5h11v5h-2M4.5 9.5h7v4h-7z"/></symbol>
+  <symbol id="i-md" viewBox="0 0 16 16"><rect x="1.5" y="3" width="13" height="10" rx="1"/><path d="M4 10.5v-5l2 2.5 2-2.5v5M11 6v4.5M9.5 9l1.5 1.5L12.5 9"/></symbol>
+  <symbol id="i-word" viewBox="0 0 16 16"><path d="M9.5 1.5h-5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-8z"/><path d="M9.5 1.5v4h4M5.5 8.5l1 3 1.5-3 1.5 3 1-3"/></symbol>
+  <symbol id="i-save" viewBox="0 0 16 16"><path d="M8 2v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11"/></symbol>
+  <symbol id="i-load" viewBox="0 0 16 16"><path d="M8 11V3M4.5 6 8 2.5 11.5 6M2.5 13.5h11"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 16 16"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3h3"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 16 16"><path d="M9.5 1.5h-5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-8zM9.5 1.5v4h4"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 16 16"><path d="M2.5 13.5l.7-3L11 2.7a1.2 1.2 0 0 1 1.7 0l.6.6a1.2 1.2 0 0 1 0 1.7L5.5 12.8z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2 1.8 13h12.4zM8 6.5v3M8 11.2v.1"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 16 16"><path d="M6 4v.01M6 8v.01M6 12v.01M10 4v.01M10 8v.01M10 12v.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5"/></symbol>
+  <symbol id="i-rack" viewBox="0 0 16 16"><rect x="3" y="1.5" width="10" height="13" rx="1"/><path d="M3 5.5h10M3 9.5h10M5.5 3.5h.01M5.5 7.5h.01M5.5 11.5h.01"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11"/></symbol>
+</svg>
+
+<div class="mk" role="toolbar" aria-label="Mockup controls">
+  <b>MOCKUP</b> static, not the real app.
+  <button id="mkTheme" aria-pressed="false">Theme: toggle light / dark</button>
+  <button id="mkMenu" aria-pressed="true">Export menu open</button>
+  <button id="mkArm" aria-pressed="false">Delete armed state</button>
+</div>
+
+<!-- ============ DESKTOP ============ -->
+<div class="app" aria-label="Desktop layout 1440">
+  <header class="top">
+    <div class="brand"><span class="mark"><svg class="ic" style="stroke-width:1.8"><use href="#i-rack"/></svg></span>Rack Survey</div>
+    <span class="sep-v"></span>
+    <input class="doc-title" type="text" value="Site Survey" aria-label="ชื่อเอกสาร Document title" title="ชื่อเอกสาร · Document title">
+    <div class="tabs" role="tablist" aria-label="Sites">
+      <button class="tab" role="tab" aria-selected="true">NT Data Center Sriracha <svg class="ic x"><use href="#i-x"/></svg></button>
+      <button class="tab" role="tab" aria-selected="false">NT Data Center Bangkok <svg class="ic x"><use href="#i-x"/></svg></button>
+      <button class="tab add" role="tab" aria-label="เพิ่มไซต์ Add site" title="เพิ่มไซต์ · Add site"><svg class="ic"><use href="#i-plus"/></svg></button>
+    </div>
+    <span class="spacer"></span>
+    <span class="status" title="Saved 10:42"><i></i>บันทึกแล้ว 10:42</span>
+    <span class="sep-v"></span>
+    <button class="btn icon" aria-label="เลิกทำ Undo (Ctrl+Z)" title="เลิกทำ · Undo (Ctrl+Z)"><svg class="ic"><use href="#i-undo"/></svg></button>
+    <button class="btn icon" aria-label="ทำซ้ำ Redo (Ctrl+Shift+Z)" title="ทำซ้ำ · Redo (Ctrl+Shift+Z)" disabled><svg class="ic"><use href="#i-redo"/></svg></button>
+    <button class="btn primary" title="Download .docx"><svg class="ic"><use href="#i-save"/></svg>ดาวน์โหลด .docx</button>
+    <div class="menu-wrap">
+      <button class="btn" id="expBtn" aria-haspopup="menu" aria-expanded="true" title="Export">ส่งออก <svg class="ic"><use href="#i-down"/></svg></button>
+      <div class="menu open" id="expMenu" role="menu">
+        <button role="menuitem"><svg class="ic"><use href="#i-print"/></svg>พิมพ์ / บันทึก PDF<span class="k">Print / Save PDF</span></button>
+        <button role="menuitem" class="hl"><svg class="ic"><use href="#i-md"/></svg>Markdown<span class="k">ส่งออก .md</span></button>
+        <button role="menuitem"><svg class="ic"><use href="#i-word"/></svg>คัดลอกไป Word<span class="k">Copy for Word</span></button>
+        <hr>
+        <button role="menuitem"><svg class="ic"><use href="#i-save"/></svg>บันทึก JSON<span class="k">Save JSON</span></button>
+        <button role="menuitem"><svg class="ic"><use href="#i-load"/></svg>โหลด JSON<span class="k">Load JSON</span></button>
+        <hr>
+        <button role="menuitem" class="danger"><svg class="ic"><use href="#i-reset"/></svg>รีเซ็ตข้อมูลทั้งหมด…<span class="k" style="color:var(--danger);opacity:.8">Reset</span></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- rail -->
+    <nav class="rail" aria-label="Sections">
+      <h6>โครงร่าง <span style="text-transform:none;letter-spacing:0;font-weight:400">Outline</span></h6>
+      <div class="site"><b>NT Data Center Sriracha</b>4 ส่วน · 2 ตู้ Rack <span style="color:var(--faint)">(4 sections)</span></div>
+      <ul class="nav">
+        <li><a href="#"><span class="n">1</span><span class="tx">ข้อมูลการสำรวจ<small>Survey info</small></span><span class="dot full" title="ครบ"></span></a></li>
+        <li><a href="#"><span class="n">2</span><span class="tx">สถานที่ติดตั้ง<small>Location &amp; floor plan</small></span><span class="dot part" title="บางส่วน"></span></a></li>
+        <li><a href="#" aria-current="true"><span class="n">3</span><span class="tx">ตู้ Rack<small>Racks, power, cabling</small></span><span class="dot part" title="บางส่วน"></span></a>
+          <ul class="nav sub" style="margin-top:2px">
+            <li><a href="#" style="font-weight:600;color:var(--accent-text)"><svg class="ic"><use href="#i-rack"/></svg>Rack G3<span class="badge err"><svg class="ic" style="width:11px;height:11px"><use href="#i-warn"/></svg>1</span></a></li>
+            <li><a href="#"><svg class="ic"><use href="#i-rack"/></svg>Rack G5<span class="dot full"></span></a></li>
+            <li><a href="#" style="color:var(--accent-text)"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มตู้ Rack</a></li>
+          </ul>
+        </li>
+        <li><a href="#"><span class="n">4</span><span class="tx">แผนภาพการเชื่อมต่อ<small>Connection diagram</small></span><span class="dot" title="ว่าง"></span></a></li>
+      </ul>
+      <div class="legend" aria-label="Legend">
+        <span><i class="dot full"></i><span class="tx">ครบ<small>complete</small></span></span>
+        <span><i class="dot part"></i><span class="tx">บางส่วน<small>partial</small></span></span>
+        <span><i class="dot"></i><span class="tx">ว่าง<small>empty</small></span></span>
+      </div>
+    </nav>
+
+    <!-- form -->
+    <main class="form">
+      <div class="sec">
+        <div class="sec-h"><svg class="ic chev"><use href="#i-chev"/></svg><span class="t"><span class="mono" style="color:var(--faint);margin-right:6px">1</span>ข้อมูลการสำรวจ<small>Survey info</small></span><span class="sum">NTDC · 8 ก.ค. 2569 · 3 ผู้สำรวจ<i class="dot full" style="margin:0"></i></span></div>
+      </div>
+      <div class="sec">
+        <div class="sec-h"><svg class="ic chev"><use href="#i-chev"/></svg><span class="t"><span class="mono" style="color:var(--faint);margin-right:6px">2</span>สถานที่ติดตั้ง<small>Location &amp; floor plan</small></span><span class="sum">ที่อยู่ยังว่าง<i class="dot part" style="margin:0"></i></span></div>
+      </div>
+
+      <div class="sec open focus">
+        <div class="sec-h"><svg class="ic chev"><use href="#i-chev"/></svg><span class="t"><span class="mono" style="color:var(--faint);margin-right:6px">3</span>ตู้ Rack<small>Racks, power, cabling</small></span><span class="sum">2 ตู้ · <span style="color:var(--danger)">1 ข้อผิดพลาด</span></span></div>
+        <div class="sec-b" style="background:var(--surface-2);border-radius:0 0 6px 6px">
+
+          <!-- Rack G3 open -->
+          <div class="rack open">
+            <div class="rack-h">
+              <svg class="ic chev" style="transform:rotate(90deg);color:var(--muted)"><use href="#i-chev"/></svg>
+              <div><div class="name">Rack G3</div></div>
+              <div class="sumline"><span class="mono">MPX9200</span><span class="d">·</span><span><span class="mono">1U</span> ใช้</span><span class="d">·</span><span><span class="mono">41U</span> ว่าง</span><span class="d">·</span><span class="badge err" style="margin:0"><svg class="ic" style="width:11px;height:11px"><use href="#i-warn"/></svg>1 คำเตือน</span></div>
+            </div>
+            <div class="rack-b">
+              <div class="row2">
+                <div class="fld"><label for="f1">ชื่อตู้ <small>Rack name</small></label><input id="f1" type="text" value="Rack G3"></div>
+                <div class="fld"><label for="f2">อุปกรณ์หลัก <small>Device</small></label><input id="f2" type="text" class="mono" value="MPX9200"></div>
+                <div class="fld"><label for="f3">ขนาด <small>U</small></label><input id="f3" type="number" class="mono" value="42"></div>
+              </div>
+
+              <div class="fld">
+                <span class="lbl">อุปกรณ์ในตู้ <small>Devices · U = ตำแหน่งต่ำสุด</small></span>
+                <div class="tblwrap">
+                  <table class="grid">
+                    <thead><tr><th>ชื่ออุปกรณ์ Name</th><th class="u">U</th><th class="h">สูง H</th><th class="a"></th></tr></thead>
+                    <tbody>
+                      <tr><td class="inputcell"><input type="text" class="mono" value="NetScaler MPX9200" aria-label="ชื่ออุปกรณ์ แถว 1"></td><td><input type="number" class="mono" value="21" aria-label="U แถว 1"></td><td><input type="number" class="mono" value="1" aria-label="สูง แถว 1"></td>
+                        <td class="act"><button class="btn icon sm" aria-label="Duplicate"><svg class="ic"><use href="#i-copy"/></svg></button><button class="btn icon sm del" aria-label="Delete row"><svg class="ic"><use href="#i-trash"/></svg></button></td></tr>
+                      <tr class="err"><td class="inputcell"><input type="text" class="mono" value="H3C S5130 Switch" aria-label="ชื่ออุปกรณ์ แถว 2"></td><td class="inputcell"><input type="number" class="mono" value="21" aria-invalid="true" aria-describedby="e1" aria-label="U แถว 2"></td><td><input type="number" class="mono" value="1" aria-label="สูง แถว 2"></td>
+                        <td class="act" style="background:var(--danger-bg)"><button class="btn icon sm" aria-label="Duplicate"><svg class="ic"><use href="#i-copy"/></svg></button><button class="btn icon sm del" aria-label="Delete row"><svg class="ic"><use href="#i-trash"/></svg></button></td></tr>
+                      <tr class="errmsg"><td colspan="4" id="e1"><svg class="ic" style="width:13px;height:13px"><use href="#i-warn"/></svg>ทับซ้อนกับ NetScaler MPX9200 ที่ <span class="mono">U 21</span> — เลื่อนไป U 22 หรือลดความสูง</td></tr>
+                    </tbody>
+                  </table>
+                  <button class="addrow"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มอุปกรณ์<span style="color:var(--muted);font-size:12px">Add device</span></button>
+                </div>
+                <span class="hint">Tab / Enter เลื่อนไปช่องถัดไป · หมายเลข Unit เริ่มนับจากล่าง</span>
+              </div>
+
+              <div class="fld">
+                <span class="lbl">แหล่งจ่ายไฟฟ้า <small>Power sources · 2 แหล่ง</small></span>
+                <div class="plist">
+                  <div class="prow"><span class="i">1</span><input type="text" value="มีเพียงพอต่อการใช้งาน C12-C13" aria-label="แหล่งที่ 1"><button class="btn icon sm del" aria-label="Delete source 1"><svg class="ic"><use href="#i-trash"/></svg></button></div>
+                  <div class="prow"><span class="i">2</span><input type="text" value="มีเพียงพอต่อการใช้งาน C12-C13" aria-label="แหล่งที่ 2"><button class="btn icon sm del" aria-label="Delete source 2"><svg class="ic"><use href="#i-trash"/></svg></button></div>
+                  <div><button class="btn sm"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มแหล่งจ่าย <span style="color:var(--muted);font-size:12px">Add source</span></button></div>
+                </div>
+              </div>
+
+              <div class="fld">
+                <span class="lbl">ระยะและแนวการเดินสายสัญญาณ <small>Cable runs</small></span>
+                <div class="cable">
+                  <div class="cable-h"><input type="text" value="สาย Fiber OM3/4 Patch Cord" aria-label="ประเภทสาย"><button class="btn icon sm del" aria-label="Delete cable group"><svg class="ic"><use href="#i-trash"/></svg></button></div>
+                  <textarea aria-label="เส้นทางสาย" rows="3">จาก MPX9200 Port 10G-1 ไป Core SW-A Port 1/0/12 ระยะ 3 เมตร
+จาก MPX9200 Port 10G-2 ไป Core SW-B Port 1/0/12 ระยะ 3 เมตร</textarea>
+                  <span class="hint">1 บรรทัด = 1 เส้นทาง · 2 เส้นทาง</span>
+                </div>
+                <div><button class="btn sm"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มประเภทสาย <span style="color:var(--muted);font-size:12px">Add cable type</span></button></div>
+              </div>
+
+              <div class="foot-actions">
+                <button class="btn sm"><svg class="ic"><use href="#i-copy"/></svg>ทำสำเนาตู้ <span style="color:var(--muted);font-size:12px">Duplicate</span></button>
+                <span class="sp"></span>
+                <button class="btn sm del" id="delBtn"><svg class="ic"><use href="#i-trash"/></svg><span>ลบตู้ Rack G3</span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rack G5 collapsed -->
+          <div class="rack">
+            <div class="rack-h">
+              <svg class="ic chev" style="color:var(--muted)"><use href="#i-chev"/></svg>
+              <div class="name">Rack G5</div>
+              <div class="sumline"><span class="mono">H3C Server</span><span class="d">·</span><span><span class="mono">2U</span> ใช้</span><span class="d">·</span><span><span class="mono">40U</span> ว่าง</span><span class="d">·</span><span>2 แหล่งจ่าย</span></div>
+              <i class="dot full" style="margin-left:auto"></i>
+            </div>
+          </div>
+          <button class="btn sm" style="margin-top:2px"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มตู้ Rack</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><svg class="ic chev"><use href="#i-chev"/></svg><span class="t"><span class="mono" style="color:var(--faint);margin-right:6px">4</span>แผนภาพการเชื่อมต่อ<small>Connection diagram</small></span><span class="sum">ยังไม่มีรูป<i class="dot" style="margin:0"></i></span></div>
+      </div>
+    </main>
+
+    <!-- preview -->
+    <aside class="prev" aria-label="Preview">
+      <div class="prev-bar">
+        <svg class="ic"><use href="#i-eye"/></svg><span>ตัวอย่างเอกสาร Preview</span>
+        <span style="color:var(--faint)">· ตามส่วนที่แก้ไข</span>
+        <span class="pg"><button class="btn icon sm" aria-label="Previous page"><svg class="ic" style="transform:rotate(180deg)"><use href="#i-chev"/></svg></button><b class="mono">หน้า 6 / 12</b><button class="btn icon sm" aria-label="Next page"><svg class="ic"><use href="#i-chev"/></svg></button></span>
+      </div>
+      <div class="prev-scroll">
+        <div class="paper">
+          <div class="logo">APJC</div>
+          <h2>3. ข้อมูลจุดติดตั้งในตู้ Rack, การเชื่อมต่อระบบไฟฟ้า และการเชื่อมต่อสายสัญญาณ</h2>
+          <table>
+            <tr><th colspan="2">ข้อมูลจุดติดตั้ง MPX9200 ในตู้ Rack G3</th></tr>
+            <tr><td>ห้อง/หมายเลขตู้</td><td>Rack G3</td></tr>
+            <tr><td>จำนวน Unit</td><td>1 Unit</td></tr>
+            <tr><td>หมายเลข Unit</td><td>U 21</td></tr>
+            <tr><td colspan="2" class="rackcell" style="padding:6px;font-weight:400">
+              <svg viewBox="0 0 220 356" width="220" height="356" role="img" aria-label="Rack elevation 42U, device at U21">
+                <rect x="30" y="4" width="160" height="344" fill="#fff" stroke="#3A3A3A" stroke-width="1.2"/>
+                <g id="rk"></g>
+                <rect x="31" y="180" width="158" height="8" fill="#0E7C86"/>
+                <text x="110" y="186.2" text-anchor="middle" font-size="5.6" fill="#fff" font-family="Consolas,monospace">NetScaler MPX9200</text>
+              </svg>
+            </td></tr>
+            <tr><td>แหล่งจ่ายไฟฟ้า<br>จำนวนแหล่งจ่าย</td><td>2 แหล่ง</td></tr>
+            <tr><td>แหล่งที่ 1</td><td>มีเพียงพอต่อการใช้งาน C12-C13</td></tr>
+          </table>
+          <div class="pn">6</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" role="status"><svg class="t-ic" viewBox="0 0 16 16"><use href="#i-trash"/></svg>ลบอุปกรณ์แล้ว<span style="opacity:.5">·</span><button>Undo</button><button class="close" aria-label="Dismiss"><svg class="ic"><use href="#i-x"/></svg></button></div>
+</div>
+
+<!-- ============ MOBILE ============ -->
+<div class="mob-wrap">
+  <div>
+    <p class="cap">Mobile 375px · Edit tab</p>
+    <div class="phone">
+      <div class="m-top">
+        <button class="btn icon" aria-label="Menu"><svg class="ic"><use href="#i-menu"/></svg></button>
+        <div class="t">Site Survey<small>บันทึกแล้ว 10:42</small></div>
+        <span class="spacer"></span>
+        <button class="btn icon" aria-label="Undo"><svg class="ic"><use href="#i-undo"/></svg></button>
+        <button class="btn icon" aria-label="Export"><svg class="ic"><use href="#i-save"/></svg></button>
+      </div>
+      <div class="m-sites" role="tablist">
+        <button class="tab" role="tab" aria-selected="true">Sriracha</button>
+        <button class="tab" role="tab" aria-selected="false">Bangkok</button>
+        <button class="tab add" role="tab" aria-label="Add site"><svg class="ic"><use href="#i-plus"/></svg></button>
+      </div>
+      <div class="seg" role="group" aria-label="View">
+        <button aria-pressed="true"><svg class="ic"><use href="#i-edit"/></svg>แก้ไข</button>
+        <button aria-pressed="false"><svg class="ic"><use href="#i-eye"/></svg>ตัวอย่าง</button>
+      </div>
+      <div class="m-body">
+        <div class="m-sec"><span class="chip">1 สำรวจ <i class="dot full" style="margin:0"></i></span><span class="chip">2 สถานที่ <i class="dot part" style="margin:0"></i></span><span class="chip" aria-current="true">3 ตู้ Rack <span class="badge err" style="margin:0">1</span></span><span class="chip">4 แผนภาพ <i class="dot" style="margin:0"></i></span></div>
+        <div class="rack open">
+          <div class="rack-h" style="flex-wrap:wrap">
+            <svg class="ic chev" style="transform:rotate(90deg);color:var(--muted)"><use href="#i-chev"/></svg><div class="name">Rack G3</div>
+            <div class="sumline" style="width:100%;padding-left:24px"><span class="mono">MPX9200</span><span class="d">·</span><span class="mono">1U</span> ใช้<span class="d">·</span><span class="badge err" style="margin:0">1 คำเตือน</span></div>
+          </div>
+          <div class="rack-b" style="gap:10px">
+            <div class="fld"><span class="lbl">อุปกรณ์ในตู้ <small>Devices</small></span>
+              <div class="tblwrap"><table class="grid">
+                <thead><tr><th>Name</th><th style="width:52px">U</th><th style="width:48px">H</th><th style="width:36px"></th></tr></thead>
+                <tbody>
+                  <tr><td><input type="text" class="mono" value="NetScaler MPX9200" style="font-size:12px"></td><td><input type="number" class="mono" value="21"></td><td><input type="number" class="mono" value="1"></td><td class="act"><button class="btn icon sm del" aria-label="Delete"><svg class="ic"><use href="#i-trash"/></svg></button></td></tr>
+                  <tr class="err"><td><input type="text" class="mono" value="H3C S5130 Switch" style="font-size:12px"></td><td class="inputcell"><input type="number" class="mono" value="21"></td><td><input type="number" class="mono" value="1"></td><td class="act" style="background:var(--danger-bg)"><button class="btn icon sm del" aria-label="Delete"><svg class="ic"><use href="#i-trash"/></svg></button></td></tr>
+                  <tr class="errmsg"><td colspan="4"><svg class="ic" style="width:13px;height:13px"><use href="#i-warn"/></svg>ทับซ้อนที่ <span class="mono">U 21</span></td></tr>
+                </tbody></table>
+                <button class="addrow"><svg class="ic"><use href="#i-plus"/></svg>เพิ่มอุปกรณ์</button></div>
+            </div>
+            <div class="fld"><span class="lbl">สายสัญญาณ <small>1 บรรทัด = 1 เส้นทาง</small></span><textarea rows="2">จาก MPX9200 Port 10G-1 ไป Core SW-A …</textarea></div>
+          </div>
+        </div>
+        <div class="rack"><div class="rack-h"><svg class="ic chev" style="color:var(--muted)"><use href="#i-chev"/></svg><div class="name">Rack G5</div><div class="sumline"><span class="mono">2U</span> ใช้<span class="d">·</span>2 แหล่งจ่าย</div><i class="dot full" style="margin-left:auto"></i></div></div>
+      </div>
+      <div class="m-bar"><button class="btn icon" aria-label="Undo"><svg class="ic"><use href="#i-undo"/></svg></button><button class="btn primary"><svg class="ic"><use href="#i-save"/></svg>ดาวน์โหลด .docx</button></div>
+    </div>
+  </div>
+
+  <div>
+    <p class="cap">Mobile 375px · Preview tab</p>
+    <div class="phone">
+      <div class="m-top">
+        <button class="btn icon" aria-label="Menu"><svg class="ic"><use href="#i-menu"/></svg></button>
+        <div class="t">Site Survey<small>บันทึกแล้ว 10:42</small></div>
+        <span class="spacer"></span>
+        <button class="btn icon" aria-label="Undo"><svg class="ic"><use href="#i-undo"/></svg></button>
+        <button class="btn icon" aria-label="Export"><svg class="ic"><use href="#i-save"/></svg></button>
+      </div>
+      <div class="m-sites" role="tablist"><button class="tab" role="tab" aria-selected="true">Sriracha</button><button class="tab" role="tab">Bangkok</button><button class="tab add" aria-label="Add site"><svg class="ic"><use href="#i-plus"/></svg></button></div>
+      <div class="seg"><button aria-pressed="false"><svg class="ic"><use href="#i-edit"/></svg>แก้ไข</button><button aria-pressed="true"><svg class="ic"><use href="#i-eye"/></svg>ตัวอย่าง</button></div>
+      <div class="m-body" style="display:flex;justify-content:center;padding-top:4px">
+        <div class="paper" style="transform:scale(.62);transform-origin:top center;margin-bottom:-300px;flex:none">
+          <div class="logo">APJC</div>
+          <h2>3. ข้อมูลจุดติดตั้งในตู้ Rack</h2>
+          <table><tr><th colspan="2">ข้อมูลจุดติดตั้ง MPX9200 ในตู้ Rack G3</th></tr><tr><td>จำนวน Unit</td><td>1 Unit</td></tr><tr><td>หมายเลข Unit</td><td>U 21</td></tr></table>
+        </div>
+      </div>
+      <div class="m-bar"><button class="btn icon" aria-label="Undo"><svg class="ic"><use href="#i-undo"/></svg></button><button class="btn primary"><svg class="ic"><use href="#i-save"/></svg>ดาวน์โหลด .docx</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// rack U numbers, bottom = 1 (8px per U, rack top y=4)
+(function(){var g=document.getElementById('rk'),s='';
+for(var n=1;n<=42;n++){var y=4+(42-n)*8;
+ s+='<line x1="30" x2="190" y1="'+y+'" y2="'+y+'" stroke="#E3E6E8" stroke-width=".6"/>';
+ s+='<text x="26" y="'+(y+6)+'" text-anchor="end" font-size="5" fill="#666" font-family="Consolas,monospace">'+n+'</text>';
+ s+='<text x="194" y="'+(y+6)+'" font-size="5" fill="#666" font-family="Consolas,monospace">'+n+'</text>';}
+g.innerHTML=s;})();
+var R=document.documentElement;
+function sync(id,on){var b=document.getElementById(id);b.setAttribute('aria-pressed',on)}
+document.getElementById('mkTheme').onclick=function(){
+  var dark=R.getAttribute('data-theme')==='dark'||(!R.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches);
+  R.setAttribute('data-theme',dark?'light':'dark');this.setAttribute('aria-pressed',!dark)};
+function menu(on){document.getElementById('expMenu').classList.toggle('open',on);document.getElementById('expBtn').setAttribute('aria-expanded',on);sync('mkMenu',on)}
+document.getElementById('mkMenu').onclick=function(){menu(this.getAttribute('aria-pressed')!=='true')};
+document.getElementById('expBtn').onclick=function(){menu(!document.getElementById('expMenu').classList.contains('open'))};
+document.getElementById('mkArm').onclick=function(){
+  var on=this.getAttribute('aria-pressed')!=='true';sync('mkArm',on);
+  var b=document.getElementById('delBtn');b.classList.toggle('arm',on);b.querySelector('span').textContent=on?'คลิกอีกครั้งเพื่อลบ':'ลบตู้ Rack G3'};
+</script>
+</body>
+</html>
